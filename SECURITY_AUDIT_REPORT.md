@@ -75,3 +75,4 @@ The platform was subjected to a thorough security assessment focusing on multi-t
 ## 5. Security Certification
 
 The security architecture satisfies strict enterprise compliance standards. The application is certified secure for production deployment.
+

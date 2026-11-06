@@ -590,12 +590,13 @@ export default function InboxPage() {
   const handleSendReply = async () => {
     if (!replyText.trim()) return;
 
+    const sentText = replyText.trim();
     const newMsg: MessageItem = {
       id: `m_${Date.now()}`,
       conversationId: selectedChat.id,
       sender: 'agent',
       type: 'text',
-      text: replyText,
+      text: sentText,
       time: 'Just now',
       status: 'delivered',
     };
@@ -603,6 +604,26 @@ export default function InboxPage() {
     setMessagesMap((prev) => ({
       ...prev,
       [selectedChat.id]: [...(prev[selectedChat.id] || []), newMsg],
+    }));
+
+    setConversations((prev) =>
+      prev.map((c) =>
+        c.id === selectedChat.id
+          ? {
+              ...c,
+              lastMessage: sentText,
+              lastMessageAt: new Date().toISOString(),
+              isCustomerLastInbound: false,
+            }
+          : c
+      )
+    );
+
+    setSelectedChat((prev) => ({
+      ...prev,
+      lastMessage: sentText,
+      lastMessageAt: new Date().toISOString(),
+      isCustomerLastInbound: false,
     }));
 
     setReplyText('');
@@ -633,8 +654,8 @@ export default function InboxPage() {
     <div className="h-[calc(100vh-8rem)] flex bg-white border-2 border-[#202020] rounded-[28px] overflow-hidden relative">
       {/* Column 1: Conversations List & Multi-View Navigation */}
       <div
-        className={`w-full sm:w-88 border-r-2 border-[#202020] flex flex-col shrink-0 bg-[#F9F6F1] transition-all ${
-          mobileView === 'chat' ? 'hidden sm:flex' : 'flex'
+        className={`w-full md:w-80 lg:w-96 border-r-2 border-[#202020] flex flex-col shrink-0 bg-[#F9F6F1] transition-all ${
+          mobileView === 'chat' ? 'hidden md:flex' : 'flex'
         }`}
       >
         {/* Header: Search & View Selector */}
@@ -927,7 +948,7 @@ export default function InboxPage() {
       {/* Column 2: Chat Canvas */}
       <div
         className={`flex-1 flex flex-col min-w-0 bg-[#F4EFE7]/30 transition-all ${
-          mobileView === 'list' ? 'hidden sm:flex' : 'flex'
+          mobileView === 'list' ? 'hidden md:flex' : 'flex'
         }`}
       >
         {/* Chat Header */}
@@ -936,7 +957,7 @@ export default function InboxPage() {
             {/* Mobile Back Button */}
             <button
               onClick={() => setMobileView('list')}
-              className="sm:hidden p-1.5 rounded-[12px] border border-[#202020] text-[#202020] hover:bg-[#F4EFE7] shrink-0"
+              className="md:hidden p-1.5 rounded-[12px] border border-[#202020] text-[#202020] hover:bg-[#F4EFE7] shrink-0"
               title="Back to conversation list"
             >
               <ArrowLeft className="h-4 w-4" />

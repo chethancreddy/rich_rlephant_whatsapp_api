@@ -71,3 +71,4 @@ Signed,
 **Chief Technology Officer & Lead Software Architect**  
 **QA Manager & Test Automation Lead**  
 *Rich Rlephant Marketing Whatsapp API Platform Engineering*
+
