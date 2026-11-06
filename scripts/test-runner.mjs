@@ -31,6 +31,7 @@ const files = [
   path.join(testDir, 'phase-01-permissions-and-ownership.test.mjs'),
   path.join(testDir, 'phase-02-contacts-and-opt-in.test.mjs'),
   path.join(testDir, 'phase-03-template-management.test.mjs'),
+  path.join(testDir, 'phase-04-campaign-engine.test.mjs'),
   path.join(securityDir, 'rls-tenant-isolation.test.mjs'),
   path.join(e2eDir, 'e2e-scenarios.test.mjs'),
   path.join(e2eDir, 'performance-and-load.test.mjs'),
