@@ -1,5 +1,5 @@
 // ============================================================================
-// Shared Team Inbox & Collision Control Service
+// Phase 5: Shared Team Inbox, Collision Control & Multi-View Service
 // Product: Rich Rlephant Marketing Whatsapp API
 // ============================================================================
 
@@ -8,6 +8,23 @@ import type { MessagingProvider, SendMessageInput } from '../meta-adapter/provid
 import { MockMessagingProvider } from '../meta-adapter/mock-provider.ts';
 
 export type ConversationStatus = 'open' | 'pending' | 'resolved' | 'closed';
+
+export type InboxView =
+  | 'all'
+  | 'unread'
+  | 'read'
+  | 'assigned_to_me'
+  | 'unassigned'
+  | 'my_team'
+  | 'groups'
+  | 'archived'
+  | 'closed';
+
+export type DepartmentName =
+  | 'Customer Support'
+  | 'Sales Desk'
+  | 'Compliance'
+  | 'Technical Operations';
 
 export interface ConversationLock {
   conversationId: string;
@@ -29,9 +46,12 @@ export interface ConversationThread {
   assignedUserId?: string;
   assignedUserName?: string;
   teamId?: string;
-  teamName?: string;
+  teamName?: DepartmentName;
   lastCustomerMessageAt?: string;
   lastMessagePreview?: string;
+  unreadCount?: number;
+  isArchived?: boolean;
+  isGroup?: boolean;
 }
 
 export interface InternalNote {
@@ -43,9 +63,139 @@ export interface InternalNote {
   createdAt: string;
 }
 
+export interface CannedResponse {
+  id: string;
+  shortcut: string; // e.g. /greet
+  title: string;
+  content: string;
+  department?: DepartmentName;
+}
+
+export const CANNED_RESPONSES: CannedResponse[] = [
+  {
+    id: 'can_001',
+    shortcut: '/greet',
+    title: 'Warm Welcome & Greeting',
+    content: 'Hello! Welcome to Rich Rlephant Support. How can we assist you today?',
+  },
+  {
+    id: 'can_002',
+    shortcut: '/hours',
+    title: 'Operating Hours',
+    content: 'Our support desk is open Monday to Saturday from 9:00 AM to 8:00 PM GST.',
+  },
+  {
+    id: 'can_003',
+    shortcut: '/location',
+    title: 'Store & Office Location',
+    content: 'Our flagship Dubai showroom is located at Dubai Marina Promenade, Building 4.',
+  },
+  {
+    id: 'can_004',
+    shortcut: '/refund',
+    title: 'Exchange & Refund Policy',
+    content: 'Items can be exchanged within 14 days of purchase with original receipt and packaging.',
+  },
+  {
+    id: 'can_005',
+    shortcut: '/delivery',
+    title: 'Delivery Window Information',
+    content: 'Standard UAE deliveries take 24–48 hours. Express same-day delivery is available for orders placed before 12 PM.',
+  },
+];
+
 // In-memory agent collision locks for low-latency active session control
 const activeLocks = new Map<string, ConversationLock>();
 const LOCK_TTL_MS = 2 * 60 * 1000; // 2 minutes
+
+/**
+ * Filter conversations by view, department, and search query
+ */
+export function filterInboxConversations<T extends {
+  id: string;
+  name: string;
+  phone: string;
+  lastMessage: string;
+  unread: number;
+  assignedTo: string;
+  team: string;
+  status: string;
+  isArchived?: boolean;
+  isGroup?: boolean;
+}>(
+  conversations: T[],
+  options: {
+    view: InboxView;
+    currentAgentName?: string;
+    currentDepartment?: string;
+    departmentFilter?: string;
+    searchQuery?: string;
+  }
+): T[] {
+  const {
+    view = 'all',
+    currentAgentName = 'Chethan Reddy',
+    currentDepartment = 'Customer Support',
+    departmentFilter = 'all',
+    searchQuery = '',
+  } = options;
+
+  return conversations.filter((chat) => {
+    // 1. Search Query
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      const matches =
+        chat.name.toLowerCase().includes(q) ||
+        chat.phone.includes(q) ||
+        chat.lastMessage.toLowerCase().includes(q);
+      if (!matches) return false;
+    }
+
+    // 2. Department Filter
+    if (departmentFilter !== 'all' && chat.team !== departmentFilter) {
+      return false;
+    }
+
+    // 3. Views
+    switch (view) {
+      case 'unread':
+        return chat.unread > 0 && !chat.isArchived && chat.status !== 'closed' && chat.status !== 'resolved';
+      case 'read':
+        return chat.unread === 0 && !chat.isArchived && chat.status !== 'closed' && chat.status !== 'resolved';
+      case 'assigned_to_me':
+        return chat.assignedTo === currentAgentName && !chat.isArchived;
+      case 'unassigned':
+        return (chat.assignedTo === 'Unassigned' || chat.assignedTo === 'Automated System') && !chat.isArchived;
+      case 'my_team':
+        return chat.team === currentDepartment && !chat.isArchived;
+      case 'groups':
+        return Boolean(chat.isGroup) && !chat.isArchived;
+      case 'archived':
+        return Boolean(chat.isArchived);
+      case 'closed':
+        return chat.status === 'closed' || chat.status === 'resolved';
+      case 'all':
+      default:
+        return !chat.isArchived && chat.status !== 'closed' && chat.status !== 'resolved';
+    }
+  });
+}
+
+/**
+ * Bulk updates read/unread status of multiple conversations
+ */
+export function bulkUpdateReadStatus<T extends { id: string; unread: number }>(
+  conversations: T[],
+  conversationIds: string[],
+  markRead: boolean
+): T[] {
+  return conversations.map((c) => {
+    if (conversationIds.includes(c.id)) {
+      return { ...c, unread: markRead ? 0 : 1 };
+    }
+    return c;
+  });
+}
 
 export class InboxService {
   private provider: MessagingProvider;
@@ -56,7 +206,6 @@ export class InboxService {
 
   /**
    * Acquires a collision lock for an agent opening a conversation
-   * Returns whether lock was acquired or is held by another agent
    */
   acquireLock(conversationId: string, agentId: string, agentName: string): {
     acquired: boolean;

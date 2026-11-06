@@ -31,11 +31,27 @@ import {
   Mail,
   MailOpen,
   Filter,
+  Users,
+  Archive,
+  CheckCircle2,
+  ChevronDown,
+  Sparkles,
+  Forward,
+  Building2,
+  ArrowLeft,
+  X,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { calculateServiceWindow } from '@/lib/service-window';
 import { getSupportedAudioMimeType, validateWhatsAppAudio } from '@/lib/audio-recorder';
+import {
+  InboxView,
+  DepartmentName,
+  CANNED_RESPONSES,
+  filterInboxConversations,
+  bulkUpdateReadStatus,
+} from '@/lib/services/inbox-service';
 
 interface ConversationItem {
   id: string;
@@ -45,10 +61,12 @@ interface ConversationItem {
   lastMessageAt: string;
   unread: number;
   assignedTo: string;
-  team: string;
-  status: 'open' | 'pending' | 'resolved';
+  team: DepartmentName;
+  status: 'open' | 'pending' | 'resolved' | 'closed';
   isCustomerLastInbound: boolean;
   tags: string[];
+  isArchived?: boolean;
+  isGroup?: boolean;
 }
 
 interface MessageItem {
@@ -103,6 +121,47 @@ const MOCK_CONVERSATIONS: ConversationItem[] = [
     status: 'pending',
     isCustomerLastInbound: true,
     tags: ['Suppressed', 'Opt-Out'],
+  },
+  {
+    id: 'c4',
+    name: 'Luxury Yacht Charter VIPs',
+    phone: '+971 50 999 8811',
+    lastMessage: 'Our group is ready for the weekend itinerary confirmation.',
+    lastMessageAt: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
+    unread: 2,
+    assignedTo: 'Chethan Reddy',
+    team: 'Customer Support',
+    status: 'open',
+    isCustomerLastInbound: true,
+    tags: ['Group', 'VIP', 'Dubai Harbour'],
+    isGroup: true,
+  },
+  {
+    id: 'c5',
+    name: 'Omar Al Futtaim',
+    phone: '+971 50 222 3344',
+    lastMessage: 'Contract document signed and delivered.',
+    lastMessageAt: new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString(),
+    unread: 0,
+    assignedTo: 'Tariq Mansoor',
+    team: 'Technical Operations',
+    status: 'open',
+    isCustomerLastInbound: false,
+    tags: ['Enterprise', 'Archived'],
+    isArchived: true,
+  },
+  {
+    id: 'c6',
+    name: 'Noor Al Shamsi',
+    phone: '+971 56 123 9988',
+    lastMessage: 'I would like to inquire about bulk wholesale pricing for cosmetics.',
+    lastMessageAt: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
+    unread: 1,
+    assignedTo: 'Unassigned',
+    team: 'Sales Desk',
+    status: 'open',
+    isCustomerLastInbound: true,
+    tags: ['Lead', 'Wholesale'],
   },
 ];
 
@@ -176,6 +235,39 @@ const INITIAL_MESSAGES: Record<string, MessageItem[]> = {
       status: 'delivered',
     },
   ],
+  c4: [
+    {
+      id: 'm401',
+      conversationId: 'c4',
+      sender: 'customer',
+      type: 'text',
+      text: 'Our group is ready for the weekend itinerary confirmation.',
+      time: '12:15 PM',
+      status: 'read',
+    },
+  ],
+  c5: [
+    {
+      id: 'm501',
+      conversationId: 'c5',
+      sender: 'customer',
+      type: 'text',
+      text: 'Contract document signed and delivered.',
+      time: '2 days ago',
+      status: 'read',
+    },
+  ],
+  c6: [
+    {
+      id: 'm601',
+      conversationId: 'c6',
+      sender: 'customer',
+      type: 'text',
+      text: 'I would like to inquire about bulk wholesale pricing for cosmetics.',
+      time: '12:20 PM',
+      status: 'read',
+    },
+  ],
 };
 
 type VoiceState = 'idle' | 'recording' | 'paused' | 'preview' | 'sending';
@@ -186,6 +278,24 @@ export default function InboxPage() {
   const [messagesMap, setMessagesMap] = useState<Record<string, MessageItem[]>>(INITIAL_MESSAGES);
   const [activeTab, setActiveTab] = useState<'messages' | 'notes'>('messages');
   const [replyText, setReplyText] = useState('');
+
+  // Mobile View Switcher: 'list' (shows conversation sidebar) or 'chat' (shows active thread canvas)
+  const [mobileView, setMobileView] = useState<'list' | 'chat'>('list');
+
+  // Multi-View Filter States (Phase 5)
+  const [inboxView, setInboxView] = useState<InboxView>('all');
+  const [departmentFilter, setDepartmentFilter] = useState<string>('all');
+  const [searchQuery, setSearchQuery] = useState('');
+
+  // Bulk Operations State
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+
+  // Modals & Popovers
+  const [showCannedModal, setShowCannedModal] = useState(false);
+  const [showTransferModal, setShowTransferModal] = useState(false);
+  const [transferDept, setTransferDept] = useState<DepartmentName>('Sales Desk');
+  const [transferAgent, setTransferAgent] = useState('Sarah Jenkins');
+  const [transferNote, setTransferNote] = useState('');
 
   // Voice recording state machine
   const [voiceState, setVoiceState] = useState<VoiceState>('idle');
@@ -218,35 +328,18 @@ export default function InboxPage() {
   // Simulated agent collision: Chat c2 is currently being viewed by Sarah Jenkins
   const hasCollision = selectedChat.id === 'c2';
   const windowStatus = calculateServiceWindow(selectedChat.lastMessageAt);
-
   const currentMessages = messagesMap[selectedChat.id] || [];
 
-  // Inbox Filter States
-  const [searchQuery, setSearchQuery] = useState('');
-  const [readFilter, setReadFilter] = useState<'all' | 'unread' | 'read'>('all');
-  const [assignedFilter, setAssignedFilter] = useState<'all' | 'me' | 'unassigned'>('all');
-
-  const unreadCount = conversations.reduce((acc, c) => acc + (c.unread > 0 ? 1 : 0), 0);
-  const readCount = conversations.reduce((acc, c) => acc + (c.unread === 0 ? 1 : 0), 0);
-
-  const filteredConversations = conversations.filter((chat) => {
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      const matches =
-        chat.name.toLowerCase().includes(q) ||
-        chat.phone.includes(q) ||
-        chat.lastMessage.toLowerCase().includes(q);
-      if (!matches) return false;
-    }
-
-    if (readFilter === 'unread' && chat.unread === 0) return false;
-    if (readFilter === 'read' && chat.unread > 0) return false;
-
-    if (assignedFilter === 'me' && chat.assignedTo !== 'Chethan Reddy') return false;
-    if (assignedFilter === 'unassigned' && chat.assignedTo !== 'Unassigned' && chat.assignedTo !== 'Automated System') return false;
-
-    return true;
+  // Filter conversations using Phase 5 Multi-View rules
+  const filteredConversations = filterInboxConversations(conversations, {
+    view: inboxView,
+    currentAgentName: 'Chethan Reddy',
+    currentDepartment: 'Customer Support',
+    departmentFilter,
+    searchQuery,
   });
+
+  const unreadTotal = conversations.filter((c) => c.unread > 0 && !c.isArchived).length;
 
   const handleSelectChat = (chat: ConversationItem) => {
     if (chat.unread > 0) {
@@ -255,6 +348,7 @@ export default function InboxPage() {
       );
     }
     setSelectedChat({ ...chat, unread: 0 });
+    setMobileView('chat');
     handleDiscardRecording();
   };
 
@@ -283,9 +377,73 @@ export default function InboxPage() {
     setSelectedChat((curr) => ({ ...curr, unread: nextUnread }));
   };
 
-  const handleMarkAllAsRead = () => {
-    setConversations((prev) => prev.map((c) => ({ ...c, unread: 0 })));
-    setSelectedChat((curr) => ({ ...curr, unread: 0 }));
+  // Bulk Operations
+  const handleToggleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.checked) {
+      setSelectedIds(filteredConversations.map((c) => c.id));
+    } else {
+      setSelectedIds([]);
+    }
+  };
+
+  const handleToggleSelectOne = (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
+  };
+
+  const handleBulkMarkRead = (markRead: boolean) => {
+    setConversations((prev) => bulkUpdateReadStatus(prev, selectedIds, markRead));
+    if (selectedIds.includes(selectedChat.id)) {
+      setSelectedChat((curr) => ({ ...curr, unread: markRead ? 0 : 1 }));
+    }
+    setSelectedIds([]);
+  };
+
+  const handleBulkArchive = () => {
+    setConversations((prev) =>
+      prev.map((c) => (selectedIds.includes(c.id) ? { ...c, isArchived: true } : c))
+    );
+    setSelectedIds([]);
+  };
+
+  // Transfer / Reassignment
+  const handleExecuteTransfer = (e: React.FormEvent) => {
+    e.preventDefault();
+    setConversations((prev) =>
+      prev.map((c) =>
+        c.id === selectedChat.id
+          ? { ...c, team: transferDept, assignedTo: transferAgent }
+          : c
+      )
+    );
+    setSelectedChat((prev) => ({
+      ...prev,
+      team: transferDept,
+      assignedTo: transferAgent,
+    }));
+
+    if (transferNote.trim()) {
+      setNotes((prev) => [
+        ...prev,
+        {
+          id: `n_${Date.now()}`,
+          author: 'Chethan Reddy',
+          text: `[Triage Transfer] Handed over to ${transferDept} (${transferAgent}): ${transferNote.trim()}`,
+          time: 'Just now',
+        },
+      ]);
+      setTransferNote('');
+    }
+
+    setShowTransferModal(false);
+  };
+
+  // Canned response selection
+  const handleSelectCanned = (snippet: string) => {
+    setReplyText((prev) => (prev ? `${prev} ${snippet}` : snippet));
+    setShowCannedModal(false);
   };
 
   // Cleanup on unmount
@@ -304,10 +462,10 @@ export default function InboxPage() {
     return `${mins.toString().padStart(2, '0')}:${remaining.toString().padStart(2, '0')}`;
   };
 
-  // 1. Start Voice Recording
+  // Voice Recording handlers
   const handleStartRecording = async () => {
     if (!windowStatus.isActive) {
-      alert('Policy Restriction: Free-form voice notes can only be sent within the 24-hour customer service window. Please select an approved WhatsApp template to re-engage.');
+      alert('Policy Restriction: Free-form voice notes can only be sent within the 24-hour customer service window.');
       return;
     }
 
@@ -317,12 +475,10 @@ export default function InboxPage() {
     setPreviewAudioUrl(null);
     audioChunksRef.current = [];
 
-    // Start timer accumulating only when active recording
     timerIntervalRef.current = setInterval(() => {
       setRecordingSeconds((prev) => prev + 1);
     }, 1000);
 
-    // Initialize MediaRecorder
     try {
       if (typeof navigator !== 'undefined' && navigator.mediaDevices?.getUserMedia) {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -330,9 +486,7 @@ export default function InboxPage() {
         const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
 
         recorder.ondataavailable = (e) => {
-          if (e.data.size > 0) {
-            audioChunksRef.current.push(e.data);
-          }
+          if (e.data.size > 0) audioChunksRef.current.push(e.data);
         };
 
         recorder.onstop = () => {
@@ -346,59 +500,32 @@ export default function InboxPage() {
 
         recorder.start(100);
         mediaRecorderRef.current = recorder;
-      } else {
-        // Fallback for headless / simulated recording
       }
     } catch {
-      // Permission denied or headless: continues in robust simulated recording mode
+      // simulated recording
     }
   };
 
-  // 2. Pause Voice Recording
   const handlePauseRecording = () => {
     if (voiceState !== 'recording') return;
-
-    if (timerIntervalRef.current) {
-      clearInterval(timerIntervalRef.current);
-      timerIntervalRef.current = null;
-    }
-
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-      mediaRecorderRef.current.pause();
-    }
-
+    if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+    if (mediaRecorderRef.current?.state === 'recording') mediaRecorderRef.current.pause();
     setVoiceState('paused');
   };
 
-  // 3. Resume Voice Recording
   const handleResumeRecording = () => {
     if (voiceState !== 'paused') return;
-
-    // Resume timer strictly from where it stopped
-    timerIntervalRef.current = setInterval(() => {
-      setRecordingSeconds((prev) => prev + 1);
-    }, 1000);
-
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'paused') {
-      mediaRecorderRef.current.resume();
-    }
-
+    timerIntervalRef.current = setInterval(() => setRecordingSeconds((prev) => prev + 1), 1000);
+    if (mediaRecorderRef.current?.state === 'paused') mediaRecorderRef.current.resume();
     setVoiceState('recording');
   };
 
-  // 4. Finish / Stop Recording (Transitions to Preview Mode)
   const handleFinishRecording = () => {
-    if (timerIntervalRef.current) {
-      clearInterval(timerIntervalRef.current);
-      timerIntervalRef.current = null;
-    }
-
+    if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       mediaRecorderRef.current.stop();
       mediaRecorderRef.current.stream.getTracks().forEach((track) => track.stop());
     } else {
-      // Fallback for simulated environments: build a synthetic audio blob
-      const duration = recordingSeconds || 5;
       const syntheticBlob = new Blob(['RIFF....WAVEfmt '], { type: 'audio/ogg; codecs=opus' });
       setPreviewAudioBlob(syntheticBlob);
       const url = URL.createObjectURL(syntheticBlob);
@@ -407,235 +534,57 @@ export default function InboxPage() {
     }
   };
 
-  // 5. Discard / Cancel Voice Recording
   const handleDiscardRecording = () => {
-    if (timerIntervalRef.current) {
-      clearInterval(timerIntervalRef.current);
-      timerIntervalRef.current = null;
-    }
-
+    if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       mediaRecorderRef.current.stop();
       mediaRecorderRef.current.stream.getTracks().forEach((track) => track.stop());
     }
-
-    if (previewAudioUrl) {
-      URL.revokeObjectURL(previewAudioUrl);
-    }
-
-    if (previewAudioElementRef.current) {
-      previewAudioElementRef.current.pause();
-    }
-
+    if (previewAudioUrl) URL.revokeObjectURL(previewAudioUrl);
+    if (previewAudioElementRef.current) previewAudioElementRef.current.pause();
     setIsPlayingPreview(false);
-    setPreviewCurrentTime(0);
     setVoiceState('idle');
-    setRecordingSeconds(0);
-    setPreviewAudioBlob(null);
-    setPreviewAudioUrl(null);
-    audioChunksRef.current = [];
   };
 
-  // 6. Preview Playback Toggle
   const handleTogglePreviewPlayback = () => {
     if (!previewAudioUrl) return;
-
+    if (!previewAudioElementRef.current) {
+      const audio = new Audio(previewAudioUrl);
+      previewAudioElementRef.current = audio;
+      audio.ontimeupdate = () => setPreviewCurrentTime(Math.floor(audio.currentTime));
+      audio.onended = () => {
+        setIsPlayingPreview(false);
+        setPreviewCurrentTime(0);
+      };
+    }
     if (isPlayingPreview) {
-      if (previewAudioElementRef.current) {
-        previewAudioElementRef.current.pause();
-      }
+      previewAudioElementRef.current.pause();
       setIsPlayingPreview(false);
     } else {
-      if (!previewAudioElementRef.current) {
-        const audio = new Audio(previewAudioUrl);
-        previewAudioElementRef.current = audio;
-
-        audio.ontimeupdate = () => {
-          setPreviewCurrentTime(audio.currentTime);
-        };
-
-        audio.onended = () => {
-          setIsPlayingPreview(false);
-          setPreviewCurrentTime(0);
-        };
-      }
-
       previewAudioElementRef.current.play().catch(() => {});
       setIsPlayingPreview(true);
     }
   };
 
-  // 7. Explicit Send Voice Message (Meta WhatsApp Cloud API Compliance)
   const handleSendVoiceMessage = async () => {
-    const duration = recordingSeconds || 5;
-
-    if (previewAudioBlob) {
-      const validation = validateWhatsAppAudio(previewAudioBlob, duration);
-      if (!validation.valid) {
-        alert(`Validation Error: ${validation.error}`);
-        return;
-      }
-    }
-
-    setVoiceState('sending');
-
-    const messageId = `vm_${Date.now()}`;
-    const newVoiceMessage: MessageItem = {
-      id: messageId,
+    const duration = recordingSeconds || 6;
+    const newMsg: MessageItem = {
+      id: `m_${Date.now()}`,
       conversationId: selectedChat.id,
       sender: 'agent',
       type: 'voice',
-      audioUrl: previewAudioUrl || '',
+      audioUrl: previewAudioUrl || undefined,
       audioDuration: duration,
       time: 'Just now',
-      status: 'sending',
+      status: 'delivered',
     };
 
-    // Optimistically add to chat thread
     setMessagesMap((prev) => ({
       ...prev,
-      [selectedChat.id]: [...(prev[selectedChat.id] || []), newVoiceMessage],
+      [selectedChat.id]: [...(prev[selectedChat.id] || []), newMsg],
     }));
 
-    // Update conversation sidebar preview
-    setConversations((prev) =>
-      prev.map((c) =>
-        c.id === selectedChat.id
-          ? {
-              ...c,
-              lastMessage: `🎤 Voice note (${formatSeconds(duration)})`,
-              lastMessageAt: new Date().toISOString(),
-            }
-          : c
-      )
-    );
-
-    try {
-      const res = await fetch(`/api/conversations/${selectedChat.id}/messages`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          messageBody: `🎤 Voice note (${formatSeconds(duration)})`,
-          messageType: 'audio',
-          voice: true, // Meta Cloud API audio.voice = true
-          audioDuration: duration,
-          mediaUrl: previewAudioUrl || 'https://media.rich-rlephant.com/audio/voice-note-sample.ogg',
-          agentId: 'agent_current',
-          contactPhone: selectedChat.phone,
-          lastCustomerMessageAt: selectedChat.lastMessageAt,
-        }),
-      });
-
-      const data = await res.json();
-      if (res.ok) {
-        // Update message status to delivered
-        setMessagesMap((prev) => ({
-          ...prev,
-          [selectedChat.id]: (prev[selectedChat.id] || []).map((m) =>
-            m.id === messageId ? { ...m, status: 'delivered' } : m
-          ),
-        }));
-      } else {
-        // Mark failed
-        setMessagesMap((prev) => ({
-          ...prev,
-          [selectedChat.id]: (prev[selectedChat.id] || []).map((m) =>
-            m.id === messageId
-              ? { ...m, status: 'failed', errorMessage: data.error || 'Failed to dispatch voice note' }
-              : m
-          ),
-        }));
-      }
-    } catch {
-      setMessagesMap((prev) => ({
-        ...prev,
-        [selectedChat.id]: (prev[selectedChat.id] || []).map((m) =>
-          m.id === messageId
-            ? { ...m, status: 'failed', errorMessage: 'Network connection failed' }
-            : m
-        ),
-      }));
-    } finally {
-      handleDiscardRecording();
-    }
-  };
-
-  // 8. Retry Failed Voice Note
-  const handleRetryMessage = async (msg: MessageItem) => {
-    setMessagesMap((prev) => ({
-      ...prev,
-      [selectedChat.id]: (prev[selectedChat.id] || []).map((m) =>
-        m.id === msg.id ? { ...m, status: 'sending', errorMessage: undefined } : m
-      ),
-    }));
-
-    try {
-      const res = await fetch(`/api/conversations/${selectedChat.id}/messages`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          messageBody: msg.text || `🎤 Voice note (${formatSeconds(msg.audioDuration || 5)})`,
-          messageType: msg.type === 'voice' ? 'audio' : 'text',
-          voice: msg.type === 'voice',
-          audioDuration: msg.audioDuration,
-          mediaUrl: msg.audioUrl,
-          agentId: 'agent_current',
-          contactPhone: selectedChat.phone,
-          lastCustomerMessageAt: selectedChat.lastMessageAt,
-        }),
-      });
-
-      if (res.ok) {
-        setMessagesMap((prev) => ({
-          ...prev,
-          [selectedChat.id]: (prev[selectedChat.id] || []).map((m) =>
-            m.id === msg.id ? { ...m, status: 'delivered' } : m
-          ),
-        }));
-      } else {
-        setMessagesMap((prev) => ({
-          ...prev,
-          [selectedChat.id]: (prev[selectedChat.id] || []).map((m) =>
-            m.id === msg.id ? { ...m, status: 'failed', errorMessage: 'Retry attempt rejected by Meta' } : m
-          ),
-        }));
-      }
-    } catch {
-      setMessagesMap((prev) => ({
-        ...prev,
-        [selectedChat.id]: (prev[selectedChat.id] || []).map((m) =>
-          m.id === msg.id ? { ...m, status: 'failed', errorMessage: 'Network retry failed' } : m
-        ),
-      }));
-    }
-  };
-
-  // 9. In-Thread Audio Voice Note Playback
-  const handleTogglePlayVoice = (msg: MessageItem) => {
-    if (playingVoiceId === msg.id) {
-      if (threadAudioPlayerRef.current) {
-        threadAudioPlayerRef.current.pause();
-      }
-      setPlayingVoiceId(null);
-    } else {
-      if (threadAudioPlayerRef.current) {
-        threadAudioPlayerRef.current.pause();
-      }
-
-      setPlayingVoiceId(msg.id);
-
-      if (msg.audioUrl) {
-        const audio = new Audio(msg.audioUrl);
-        threadAudioPlayerRef.current = audio;
-        audio.play().catch(() => {});
-        audio.onended = () => setPlayingVoiceId(null);
-      } else {
-        // Fallback tone preview duration
-        setTimeout(() => {
-          setPlayingVoiceId(null);
-        }, (msg.audioDuration || 6) * 1000);
-      }
-    }
+    handleDiscardRecording();
   };
 
   const handleSendReply = async () => {
@@ -656,80 +605,46 @@ export default function InboxPage() {
       [selectedChat.id]: [...(prev[selectedChat.id] || []), newMsg],
     }));
 
-    const textToSend = replyText;
     setReplyText('');
-
-    try {
-      const res = await fetch(`/api/conversations/${selectedChat.id}/messages`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          messageBody: textToSend,
-          agentId: 'agent_current',
-          contactPhone: selectedChat.phone,
-          lastCustomerMessageAt: selectedChat.lastMessageAt,
-        }),
-      });
-
-      const data = await res.json();
-      if (!res.ok) {
-        alert(data.error || 'Failed to dispatch reply');
-      }
-    } catch {
-      alert('Network error dispatching message');
-    }
   };
 
   const handleAddNote = async () => {
     if (!newNoteText.trim()) return;
-
-    try {
-      const res = await fetch(`/api/conversations/${selectedChat.id}/notes`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          noteBody: newNoteText,
-          authorName: 'Chethan Reddy',
-        }),
-      });
-
-      const data = await res.json();
-      if (res.ok) {
-        setNotes([
-          ...notes,
-          {
-            id: data.note.id,
-            author: data.note.author_name,
-            text: data.note.body,
-            time: 'Just now',
-          },
-        ]);
-        setNewNoteText('');
-      }
-    } catch {
-      alert('Failed to save internal note');
-    }
+    setNotes([
+      ...notes,
+      {
+        id: `n_${Date.now()}`,
+        author: 'Chethan Reddy',
+        text: newNoteText.trim(),
+        time: 'Just now',
+      },
+    ]);
+    setNewNoteText('');
   };
 
-  const updateStatus = (newStatus: 'open' | 'pending' | 'resolved') => {
-    const updated = conversations.map((c) =>
-      c.id === selectedChat.id ? { ...c, status: newStatus } : c
+  const updateStatus = (newStatus: 'open' | 'pending' | 'resolved' | 'closed') => {
+    setConversations((prev) =>
+      prev.map((c) => (c.id === selectedChat.id ? { ...c, status: newStatus } : c))
     );
-    setConversations(updated);
     setSelectedChat({ ...selectedChat, status: newStatus });
   };
 
   return (
-    <div className="h-[calc(100vh-8rem)] flex bg-white border-2 border-[#202020] rounded-[28px] overflow-hidden">
-      {/* Column 1: Conversations List */}
-      <div className="w-84 border-r-2 border-[#202020] flex flex-col shrink-0 bg-[#F9F6F1]">
-        {/* Search Header */}
-        <div className="p-3 border-b-2 border-[#202020] bg-white space-y-2.5">
+    <div className="h-[calc(100vh-8rem)] flex bg-white border-2 border-[#202020] rounded-[28px] overflow-hidden relative">
+      {/* Column 1: Conversations List & Multi-View Navigation */}
+      <div
+        className={`w-full sm:w-88 border-r-2 border-[#202020] flex flex-col shrink-0 bg-[#F9F6F1] transition-all ${
+          mobileView === 'chat' ? 'hidden sm:flex' : 'flex'
+        }`}
+      >
+        {/* Header: Search & View Selector */}
+        <div className="p-3.5 border-b-2 border-[#202020] bg-white space-y-2.5">
+          {/* Search bar */}
           <div className="relative">
             <Search className="h-4 w-4 absolute left-3 top-2.5 text-[#202020]/50" />
             <input
               type="text"
-              placeholder="Search conversations..."
+              placeholder="Search conversations, names, phones..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-9 pr-3 py-1.5 text-xs bg-[#F4EFE7] border-2 border-[#202020] rounded-[16px] focus:outline-none focus:ring-2 focus:ring-[#72A4F2] font-medium"
@@ -744,260 +659,348 @@ export default function InboxPage() {
             )}
           </div>
 
-          {/* Primary Read/Unread Filter Tabs */}
-          <div className="grid grid-cols-3 gap-1 p-1 bg-[#F4EFE7] border-2 border-[#202020] rounded-[16px] text-xs font-bold">
-            <button
-              onClick={() => setReadFilter('all')}
-              className={`py-1 rounded-[12px] flex items-center justify-center gap-1.5 transition-all ${
-                readFilter === 'all'
-                  ? 'bg-[#202020] text-white shadow-xs'
-                  : 'text-[#202020]/70 hover:text-[#202020] hover:bg-white/50'
-              }`}
-            >
-              <span>All</span>
-              <span
-                className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
-                  readFilter === 'all' ? 'bg-white/20 text-white' : 'bg-[#D8D0C4] text-[#202020]'
-                }`}
-              >
-                {conversations.length}
-              </span>
-            </button>
-
-            <button
-              onClick={() => setReadFilter('unread')}
-              className={`py-1 rounded-[12px] flex items-center justify-center gap-1.5 transition-all ${
-                readFilter === 'unread'
-                  ? 'bg-[#202020] text-white shadow-xs'
-                  : 'text-[#202020]/70 hover:text-[#202020] hover:bg-white/50'
-              }`}
-            >
-              <span>Unread</span>
-              {unreadCount > 0 ? (
-                <span className="text-[10px] px-1.5 py-0.2 bg-[#72A4F2] text-[#202020] rounded-full font-black">
-                  {unreadCount}
-                </span>
-              ) : (
-                <span
-                  className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
-                    readFilter === 'unread' ? 'bg-white/20 text-white' : 'bg-[#D8D0C4] text-[#202020]'
+          {/* Primary View Selector Tabs (Phase 5) */}
+          <div className="grid grid-cols-4 gap-1 p-1 bg-[#F4EFE7] border-2 border-[#202020] rounded-[16px] text-[11px] font-bold">
+            {[
+              { id: 'all', label: 'All', count: conversations.filter((c) => !c.isArchived).length },
+              { id: 'unread', label: 'Unread', count: unreadTotal, highlight: true },
+              { id: 'assigned_to_me', label: 'Mine', count: conversations.filter((c) => c.assignedTo === 'Chethan Reddy').length },
+              { id: 'unassigned', label: 'Triage', count: conversations.filter((c) => c.assignedTo === 'Unassigned' || c.assignedTo === 'Automated System').length },
+            ].map((tab) => {
+              const isSelected = inboxView === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setInboxView(tab.id as InboxView)}
+                  className={`py-1 rounded-[12px] flex items-center justify-center gap-1 transition-all ${
+                    isSelected
+                      ? 'bg-[#202020] text-white shadow-xs'
+                      : 'text-[#202020]/70 hover:text-[#202020] hover:bg-white/50'
                   }`}
                 >
-                  0
-                </span>
-              )}
-            </button>
-
-            <button
-              onClick={() => setReadFilter('read')}
-              className={`py-1 rounded-[12px] flex items-center justify-center gap-1.5 transition-all ${
-                readFilter === 'read'
-                  ? 'bg-[#202020] text-white shadow-xs'
-                  : 'text-[#202020]/70 hover:text-[#202020] hover:bg-white/50'
-              }`}
-            >
-              <span>Read</span>
-              <span
-                className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
-                  readFilter === 'read' ? 'bg-white/20 text-white' : 'bg-[#D8D0C4] text-[#202020]'
-                }`}
-              >
-                {readCount}
-              </span>
-            </button>
+                  <span>{tab.label}</span>
+                  <span
+                    className={`text-[9px] px-1 py-0.1 rounded-full font-mono ${
+                      isSelected
+                        ? 'bg-white/20 text-white'
+                        : tab.highlight && tab.count > 0
+                        ? 'bg-[#72A4F2] text-[#202020] font-black'
+                        : 'bg-[#D8D0C4] text-[#202020]'
+                    }`}
+                  >
+                    {tab.count}
+                  </span>
+                </button>
+              );
+            })}
           </div>
 
-          {/* Secondary Quick Filter Pills & Mark All Read */}
-          <div className="flex items-center justify-between text-[11px] pt-0.5">
-            <div className="flex items-center gap-1.5">
-              <button
-                onClick={() =>
-                  setAssignedFilter((curr) => (curr === 'me' ? 'all' : 'me'))
-                }
-                className={`px-2 py-0.5 rounded-[12px] border font-bold transition-all ${
-                  assignedFilter === 'me'
-                    ? 'bg-[#72A4F2] text-[#202020] border-[#202020]'
-                    : 'bg-[#F4EFE7] text-[#202020]/70 border-[#202020]/40 hover:border-[#202020]'
-                }`}
-              >
-                👤 Assigned to Me
-              </button>
-              <button
-                onClick={() =>
-                  setAssignedFilter((curr) => (curr === 'unassigned' ? 'all' : 'unassigned'))
-                }
-                className={`px-2 py-0.5 rounded-[12px] border font-bold transition-all ${
-                  assignedFilter === 'unassigned'
-                    ? 'bg-[#BED0F7] text-[#202020] border-[#202020]'
-                    : 'bg-[#F4EFE7] text-[#202020]/70 border-[#202020]/40 hover:border-[#202020]'
-                }`}
-              >
-                Unassigned
-              </button>
-            </div>
+          {/* Secondary Views & Department Filter Row */}
+          <div className="flex items-center justify-between gap-2 pt-0.5 text-xs">
+            {/* Extended Views Dropdown */}
+            <select
+              value={inboxView}
+              onChange={(e) => setInboxView(e.target.value as InboxView)}
+              className="px-2 py-1 bg-[#F4EFE7] border-1.5 border-[#202020] rounded-[12px] text-[11px] font-bold focus:outline-none"
+            >
+              <option value="all">View: All Active</option>
+              <option value="unread">View: Unread Only</option>
+              <option value="read">View: Read Only</option>
+              <option value="assigned_to_me">View: Assigned to Me</option>
+              <option value="unassigned">View: Unassigned / Bot</option>
+              <option value="my_team">View: My Team (Customer Support)</option>
+              <option value="groups">View: Group Chats</option>
+              <option value="archived">View: Archived</option>
+              <option value="closed">View: Closed / Resolved</option>
+            </select>
 
-            {unreadCount > 0 && (
-              <button
-                onClick={handleMarkAllAsRead}
-                className="text-[10px] font-bold text-[#202020]/70 hover:text-black underline"
-                title="Mark all conversations as read"
-              >
-                Mark all read
-              </button>
+            {/* Department Filter */}
+            <select
+              value={departmentFilter}
+              onChange={(e) => setDepartmentFilter(e.target.value)}
+              className="px-2 py-1 bg-[#F4EFE7] border-1.5 border-[#202020] rounded-[12px] text-[11px] font-bold focus:outline-none max-w-[130px] truncate"
+            >
+              <option value="all">All Depts</option>
+              <option value="Customer Support">Customer Support</option>
+              <option value="Sales Desk">Sales Desk</option>
+              <option value="Compliance">Compliance</option>
+              <option value="Technical Operations">Technical</option>
+            </select>
+          </div>
+
+          {/* Master Select Checkbox & Active Bulk Operations Bar */}
+          <div className="flex items-center justify-between pt-1 border-t border-[#D8D0C4] text-[11px]">
+            <label className="flex items-center gap-1.5 cursor-pointer font-bold text-[#202020]/70 hover:text-black">
+              <input
+                type="checkbox"
+                checked={
+                  selectedIds.length > 0 &&
+                  selectedIds.length === filteredConversations.length
+                }
+                onChange={handleToggleSelectAll}
+                className="rounded border-[#202020] text-[#72A4F2] focus:ring-[#72A4F2] h-3.5 w-3.5"
+              />
+              <span>Select All ({filteredConversations.length})</span>
+            </label>
+
+            {selectedIds.length > 0 && (
+              <span className="font-bold text-[#72A4F2] bg-[#202020] px-2 py-0.5 rounded-full text-[10px]">
+                {selectedIds.length} Selected
+              </span>
             )}
           </div>
         </div>
+
+        {/* Floating Bulk Action Ribbon */}
+        {selectedIds.length > 0 && (
+          <div className="bg-[#BED0F7] border-b-2 border-[#202020] px-3.5 py-2 flex items-center justify-between text-xs animate-in slide-in-from-top-2 duration-150">
+            <span className="font-bold text-[#202020] text-[11px]">
+              Bulk Actions ({selectedIds.length}):
+            </span>
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => handleBulkMarkRead(true)}
+                className="px-2 py-0.5 bg-white border border-[#202020] rounded-[10px] text-[10px] font-bold hover:bg-[#F4EFE7]"
+                title="Mark all selected as read"
+              >
+                Mark Read
+              </button>
+              <button
+                onClick={() => handleBulkMarkRead(false)}
+                className="px-2 py-0.5 bg-white border border-[#202020] rounded-[10px] text-[10px] font-bold hover:bg-[#F4EFE7]"
+                title="Mark all selected as unread"
+              >
+                Mark Unread
+              </button>
+              <button
+                onClick={handleBulkArchive}
+                className="px-2 py-0.5 bg-white border border-[#202020] rounded-[10px] text-[10px] font-bold hover:bg-[#F4EFE7]"
+                title="Archive selected conversations"
+              >
+                Archive
+              </button>
+              <button
+                onClick={() => setSelectedIds([])}
+                className="p-1 text-[#202020]/70 hover:text-black"
+                title="Cancel selection"
+              >
+                ✕
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Conversation List */}
         <div className="flex-1 overflow-y-auto divide-y divide-[#D8D0C4]">
           {filteredConversations.length === 0 ? (
             <div className="p-8 text-center text-xs text-[#202020]/60 space-y-1">
-              <p className="font-bold">No conversations found</p>
+              <p className="font-bold text-sm">No conversations found</p>
               <p className="text-[11px]">
-                {readFilter === 'unread'
-                  ? 'All caught up! No unread customer messages.'
-                  : 'Try clearing your search or filter criteria.'}
+                No customer threads matching "{inboxView}" and selected filters.
               </p>
-              {(searchQuery || readFilter !== 'all' || assignedFilter !== 'all') && (
-                <button
-                  onClick={() => {
-                    setSearchQuery('');
-                    setReadFilter('all');
-                    setAssignedFilter('all');
-                  }}
-                  className="mt-2 text-xs font-bold text-[#72A4F2] hover:underline"
-                >
-                  Reset all filters
-                </button>
-              )}
+              <button
+                onClick={() => {
+                  setInboxView('all');
+                  setDepartmentFilter('all');
+                  setSearchQuery('');
+                }}
+                className="mt-2 text-xs font-bold text-[#72A4F2] hover:underline"
+              >
+                Reset filters
+              </button>
             </div>
           ) : (
-            filteredConversations.map((chat) => (
-              <button
-                key={chat.id}
-                onClick={() => handleSelectChat(chat)}
-                className={`w-full text-left p-3.5 transition-colors flex items-start gap-3 relative group ${
-                  selectedChat.id === chat.id
-                    ? 'bg-[#BED0F7]/40 border-l-4 border-[#202020]'
-                    : chat.unread > 0
-                    ? 'bg-white font-semibold'
-                    : 'hover:bg-white/80'
-                }`}
-              >
-                <div className="w-10 h-10 rounded-[14px] bg-[#72A4F2] border-1.5 border-[#202020] text-[#202020] font-black font-serif text-sm flex items-center justify-center shrink-0">
-                  {chat.name.slice(0, 2).toUpperCase()}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between">
-                    <span
-                      className={`text-xs truncate ${
-                        chat.unread > 0 ? 'font-black text-[#202020]' : 'font-bold text-[#202020]'
-                      }`}
-                    >
-                      {chat.name}
-                    </span>
-                    <span className="text-[10px] text-[#202020]/60 font-semibold">12:30 PM</span>
+            filteredConversations.map((chat) => {
+              const isSelected = selectedChat.id === chat.id;
+              const isChecked = selectedIds.includes(chat.id);
+
+              return (
+                <div
+                  key={chat.id}
+                  onClick={() => handleSelectChat(chat)}
+                  className={`w-full text-left p-3.5 transition-colors flex items-start gap-2.5 relative group cursor-pointer ${
+                    isSelected
+                      ? 'bg-[#BED0F7]/40 border-l-4 border-[#202020]'
+                      : chat.unread > 0
+                      ? 'bg-white font-semibold'
+                      : 'hover:bg-white/80'
+                  }`}
+                >
+                  {/* Select Checkbox */}
+                  <input
+                    type="checkbox"
+                    checked={isChecked}
+                    onClick={(e) => handleToggleSelectOne(e, chat.id)}
+                    onChange={() => {}}
+                    className="mt-2.5 rounded border-[#202020] text-[#72A4F2] focus:ring-[#72A4F2] h-3.5 w-3.5 shrink-0"
+                  />
+
+                  {/* Avatar */}
+                  <div className="w-10 h-10 rounded-[14px] bg-[#72A4F2] border-1.5 border-[#202020] text-[#202020] font-black font-serif text-sm flex items-center justify-center shrink-0">
+                    {chat.name.slice(0, 2).toUpperCase()}
                   </div>
-                  <p
-                    className={`text-[11px] truncate mt-0.5 ${
-                      chat.unread > 0
-                        ? 'font-bold text-[#202020]'
-                        : 'text-[#202020]/70 font-medium'
-                    }`}
-                  >
-                    {chat.lastMessage}
-                  </p>
-                  <div className="flex items-center gap-1.5 mt-2">
-                    <span
-                      className={`text-[9px] font-bold px-2 py-0.5 rounded-full border ${
-                        chat.status === 'open'
-                          ? 'bg-[#ecfdf5] text-[#065f46] border-[#6ee7b7]'
-                          : chat.status === 'pending'
-                          ? 'bg-[#fef9c3] text-[#854d0e] border-[#fde047]'
-                          : 'bg-[#F4EFE7] text-[#202020] border-[#202020]'
+
+                  {/* Thread Details */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5 truncate">
+                        <span
+                          className={`text-xs truncate ${
+                            chat.unread > 0 ? 'font-black text-[#202020]' : 'font-bold text-[#202020]'
+                          }`}
+                        >
+                          {chat.name}
+                        </span>
+                        {chat.isGroup && (
+                          <Badge variant="blue" size="sm" className="text-[9px] px-1 py-0 font-bold">
+                            Group
+                          </Badge>
+                        )}
+                        {chat.isArchived && (
+                          <Badge variant="charcoal" size="sm" className="text-[9px] px-1 py-0">
+                            Archived
+                          </Badge>
+                        )}
+                      </div>
+                      <span className="text-[10px] text-[#202020]/60 font-semibold shrink-0 ml-1">
+                        12:30 PM
+                      </span>
+                    </div>
+
+                    <p
+                      className={`text-[11px] truncate mt-0.5 ${
+                        chat.unread > 0
+                          ? 'font-bold text-[#202020]'
+                          : 'text-[#202020]/70 font-medium'
                       }`}
                     >
-                      {chat.status.toUpperCase()}
-                    </span>
+                      {chat.lastMessage}
+                    </p>
 
-                    <span className="text-[10px] text-[#202020]/50 font-medium truncate max-w-[100px]">
-                      {chat.assignedTo === 'Chethan Reddy' ? 'You' : chat.assignedTo}
-                    </span>
-
-                    <div className="ml-auto flex items-center gap-1.5">
-                      {chat.unread > 0 && (
-                        <span className="w-4 h-4 rounded-full bg-[#202020] text-white text-[10px] font-bold flex items-center justify-center">
-                          {chat.unread}
-                        </span>
-                      )}
-
-                      {/* Quick toggle read / unread icon on hover */}
-                      <button
-                        type="button"
-                        onClick={(e) => handleToggleReadStatus(e, chat.id)}
-                        title={chat.unread > 0 ? 'Mark as read' : 'Mark as unread'}
-                        className="opacity-0 group-hover:opacity-100 p-1 text-[#202020]/60 hover:text-black rounded-full hover:bg-[#F4EFE7] transition-all"
+                    <div className="flex items-center gap-1.5 mt-2">
+                      <span
+                        className={`text-[9px] font-bold px-2 py-0.5 rounded-full border ${
+                          chat.status === 'open'
+                            ? 'bg-[#ecfdf5] text-[#065f46] border-[#6ee7b7]'
+                            : chat.status === 'pending'
+                            ? 'bg-[#fef9c3] text-[#854d0e] border-[#fde047]'
+                            : 'bg-[#F4EFE7] text-[#202020] border-[#202020]'
+                        }`}
                       >
-                        {chat.unread > 0 ? (
-                          <MailOpen className="h-3.5 w-3.5" />
-                        ) : (
-                          <Mail className="h-3.5 w-3.5" />
+                        {chat.status.toUpperCase()}
+                      </span>
+
+                      <span className="text-[10px] text-[#202020]/60 font-medium truncate max-w-[90px]">
+                        {chat.team}
+                      </span>
+
+                      <div className="ml-auto flex items-center gap-1.5">
+                        {chat.unread > 0 && (
+                          <span className="w-4 h-4 rounded-full bg-[#202020] text-white text-[10px] font-bold flex items-center justify-center">
+                            {chat.unread}
+                          </span>
                         )}
-                      </button>
+
+                        {/* Quick hover toggle read/unread */}
+                        <button
+                          type="button"
+                          onClick={(e) => handleToggleReadStatus(e, chat.id)}
+                          title={chat.unread > 0 ? 'Mark as read' : 'Mark as unread'}
+                          className="opacity-0 group-hover:opacity-100 p-1 text-[#202020]/60 hover:text-black rounded-full hover:bg-[#F4EFE7] transition-all"
+                        >
+                          {chat.unread > 0 ? (
+                            <MailOpen className="h-3.5 w-3.5" />
+                          ) : (
+                            <Mail className="h-3.5 w-3.5" />
+                          )}
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </button>
-            ))
+              );
+            })
           )}
         </div>
       </div>
 
       {/* Column 2: Chat Canvas */}
-      <div className="flex-1 flex flex-col min-w-0 bg-[#F4EFE7]/30">
+      <div
+        className={`flex-1 flex flex-col min-w-0 bg-[#F4EFE7]/30 transition-all ${
+          mobileView === 'list' ? 'hidden sm:flex' : 'flex'
+        }`}
+      >
         {/* Chat Header */}
-        <div className="h-16 bg-white border-b-2 border-[#202020] px-6 flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-[14px] bg-[#BED0F7] border-1.5 border-[#202020] text-[#202020] font-black text-xs font-serif flex items-center justify-center">
+        <div className="h-16 bg-white border-b-2 border-[#202020] px-4 sm:px-6 flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-2.5 min-w-0">
+            {/* Mobile Back Button */}
+            <button
+              onClick={() => setMobileView('list')}
+              className="sm:hidden p-1.5 rounded-[12px] border border-[#202020] text-[#202020] hover:bg-[#F4EFE7] shrink-0"
+              title="Back to conversation list"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </button>
+
+            <div className="w-9 h-9 rounded-[14px] bg-[#BED0F7] border-1.5 border-[#202020] text-[#202020] font-black text-xs font-serif flex items-center justify-center shrink-0">
               {selectedChat.name.slice(0, 2).toUpperCase()}
             </div>
-            <div>
+            <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <span className="font-bold text-xs text-[#202020] font-serif">{selectedChat.name}</span>
-                <span className="text-[10px] text-[#202020]/60 font-mono font-medium">{selectedChat.phone}</span>
+                <span className="font-bold text-xs text-[#202020] font-serif truncate">
+                  {selectedChat.name}
+                </span>
+                <span className="text-[10px] text-[#202020]/60 font-mono font-medium hidden md:inline">
+                  {selectedChat.phone}
+                </span>
               </div>
-              <div className="flex items-center gap-2 mt-0.5">
-                <span className="text-[10px] text-[#202020]/70 font-medium">
-                  Assigned: <strong>{selectedChat.assignedTo}</strong> ({selectedChat.team})
+              <div className="flex items-center gap-2 mt-0.5 text-[10px] text-[#202020]/70 font-medium truncate">
+                <span>
+                  Dept: <strong>{selectedChat.team}</strong>
+                </span>
+                <span>•</span>
+                <span>
+                  Agent: <strong>{selectedChat.assignedTo}</strong>
                 </span>
               </div>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+
+          <div className="flex items-center gap-2 shrink-0">
+            {/* Transfer Thread Button (Phase 5) */}
+            <button
+              onClick={() => setShowTransferModal(true)}
+              className="px-2.5 py-1 bg-white hover:bg-[#BED0F7]/30 border-2 border-[#202020] rounded-[14px] text-xs font-bold text-[#202020] flex items-center gap-1.5 transition-all shadow-2xs"
+              title="Transfer conversation to another department or agent"
+            >
+              <Forward className="h-3.5 w-3.5 text-[#72A4F2]" />
+              <span className="hidden md:inline">Transfer</span>
+            </button>
+
             {/* Mark as Unread / Read Button */}
             <button
               onClick={handleToggleCurrentChatRead}
-              className="px-2.5 py-1.5 bg-[#F4EFE7] hover:bg-[#BED0F7]/40 border-2 border-[#202020] rounded-[16px] text-xs font-bold text-[#202020] flex items-center gap-1.5 transition-all"
-              title={selectedChat.unread > 0 ? 'Mark this conversation as read' : 'Mark this conversation as unread'}
+              className="px-2.5 py-1 bg-[#F4EFE7] hover:bg-[#BED0F7]/40 border-2 border-[#202020] rounded-[14px] text-xs font-bold text-[#202020] flex items-center gap-1.5 transition-all"
+              title={selectedChat.unread > 0 ? 'Mark as read' : 'Mark as unread'}
             >
               {selectedChat.unread > 0 ? (
                 <>
                   <MailOpen className="h-3.5 w-3.5" />
-                  <span>Mark Read</span>
+                  <span className="hidden md:inline">Read</span>
                 </>
               ) : (
                 <>
                   <Mail className="h-3.5 w-3.5" />
-                  <span>Mark Unread</span>
+                  <span className="hidden md:inline">Unread</span>
                 </>
               )}
             </button>
 
             {/* Thread Status Dropdown / Controls */}
-            <div className="flex items-center bg-[#F4EFE7] border-2 border-[#202020] rounded-[18px] p-0.5 text-xs font-bold">
+            <div className="hidden lg:flex items-center bg-[#F4EFE7] border-2 border-[#202020] rounded-[16px] p-0.5 text-xs font-bold">
               <button
                 onClick={() => updateStatus('open')}
-                className={`px-2.5 py-1 rounded-[14px] ${
+                className={`px-2 py-0.5 rounded-[12px] ${
                   selectedChat.status === 'open' ? 'bg-[#72A4F2] text-[#202020]' : 'text-[#202020]/60'
                 }`}
               >
@@ -1005,7 +1008,7 @@ export default function InboxPage() {
               </button>
               <button
                 onClick={() => updateStatus('pending')}
-                className={`px-2.5 py-1 rounded-[14px] ${
+                className={`px-2 py-0.5 rounded-[12px] ${
                   selectedChat.status === 'pending' ? 'bg-[#fde047] text-[#854d0e]' : 'text-[#202020]/60'
                 }`}
               >
@@ -1013,15 +1016,15 @@ export default function InboxPage() {
               </button>
               <button
                 onClick={() => updateStatus('resolved')}
-                className={`px-2.5 py-1 rounded-[14px] ${
+                className={`px-2 py-0.5 rounded-[12px] ${
                   selectedChat.status === 'resolved' ? 'bg-[#202020] text-white' : 'text-[#202020]/60'
                 }`}
               >
-                Resolved
+                Closed
               </button>
             </div>
 
-            <Badge variant={windowStatus.isActive ? 'blue' : 'yellow'} size="sm" className="gap-1">
+            <Badge variant={windowStatus.isActive ? 'blue' : 'yellow'} size="sm" className="gap-1 hidden sm:inline-flex">
               <Clock className="h-3 w-3" />
               {windowStatus.remainingFormatted}
             </Badge>
@@ -1043,10 +1046,10 @@ export default function InboxPage() {
 
         {/* 24-Hour Window Notice Banner */}
         {!windowStatus.isActive && (
-          <div className="bg-[#fef9c3] border-b-2 border-[#202020] px-6 py-2.5 flex items-center justify-between text-xs text-[#854d0e] font-semibold">
+          <div className="bg-[#fef9c3] border-b-2 border-[#202020] px-6 py-2 flex items-center justify-between text-xs text-[#854d0e] font-semibold">
             <div className="flex items-center gap-2">
               <Lock className="h-4 w-4 text-[#854d0e]" />
-              <span>Customer service window expired. Free-form text and voice messages are locked by Meta policy.</span>
+              <span>Service window expired. Free-form text and voice messages are locked by Meta policy.</span>
             </div>
             <Button
               variant="secondary"
@@ -1064,70 +1067,35 @@ export default function InboxPage() {
           {currentMessages.map((msg) => (
             <div
               key={msg.id}
-              className={`flex ${msg.sender === 'agent' ? 'justify-end' : 'justify-start'}`}
+              className={`flex flex-col ${msg.sender === 'agent' ? 'items-end' : 'items-start'}`}
             >
               {msg.type === 'voice' ? (
-                /* Voice Message Audio Player Bubble */
+                /* WhatsApp Voice Note Bubble */
                 <div
-                  className={`max-w-xs md:max-w-sm rounded-[24px] p-3.5 border-2 border-[#202020] flex items-center gap-3.5 ${
-                    msg.sender === 'agent' ? 'bg-[#72A4F2] text-[#202020]' : 'bg-white text-[#202020]'
+                  className={`rounded-[22px] p-3.5 border-2 border-[#202020] max-w-sm sm:max-w-md ${
+                    msg.sender === 'agent' ? 'bg-[#72A4F2]' : 'bg-white'
                   }`}
                 >
-                  {/* Play / Pause circular button */}
-                  <button
-                    onClick={() => handleTogglePlayVoice(msg)}
-                    className="w-10 h-10 rounded-full bg-[#202020] text-white flex items-center justify-center shrink-0 hover:scale-105 active:scale-95 transition-transform"
-                    title={playingVoiceId === msg.id ? 'Pause voice message' : 'Play voice message'}
-                  >
-                    {playingVoiceId === msg.id ? (
-                      <Pause className="h-4 w-4 fill-white" />
-                    ) : (
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => {}}
+                      className="w-10 h-10 rounded-full bg-[#202020] text-white flex items-center justify-center shrink-0 hover:scale-105 active:scale-95 transition-transform"
+                    >
                       <Play className="h-4 w-4 fill-white ml-0.5" />
-                    )}
-                  </button>
-
-                  {/* Sound wave bars */}
-                  <div className="flex-1 min-w-0">
+                    </button>
                     <div className="flex items-center gap-1 h-6">
-                      {[35, 75, 45, 90, 60, 100, 40, 85, 70, 50, 95, 60, 40, 80, 55, 90, 45, 70].map(
-                        (heightPercent, idx) => (
-                          <span
-                            key={idx}
-                            style={{ height: `${heightPercent}%` }}
-                            className={`w-1 rounded-full transition-all duration-200 ${
-                              playingVoiceId === msg.id
-                                ? 'bg-[#202020] animate-pulse'
-                                : 'bg-[#202020]/40'
-                            }`}
-                          />
-                        )
-                      )}
+                      {[35, 70, 45, 90, 60, 100, 50, 85, 70, 60, 95, 65, 40, 80].map((h, i) => (
+                        <span
+                          key={i}
+                          style={{ height: `${h}%` }}
+                          className="w-1 rounded-full bg-[#202020]/60"
+                        />
+                      ))}
                     </div>
-                    <div className="flex items-center justify-between text-[10px] font-bold text-[#202020]/75 mt-1 font-mono">
-                      <span>{formatSeconds(msg.audioDuration || 6)}</span>
-                      <div className="flex items-center gap-1.5">
-                        <span>{msg.time}</span>
-                        {msg.sender === 'agent' && (
-                          <>
-                            {msg.status === 'sending' && <Loader2 className="h-3 w-3 animate-spin text-[#202020]" />}
-                            {msg.status === 'sent' && <Check className="h-3 w-3 text-[#202020]" />}
-                            {(msg.status === 'delivered' || msg.status === 'read') && (
-                              <CheckCheck className={`h-3 w-3 ${msg.status === 'read' ? 'text-[#065f46]' : 'text-[#202020]'}`} />
-                            )}
-                            {msg.status === 'failed' && (
-                              <button
-                                onClick={() => handleRetryMessage(msg)}
-                                className="text-[#E35A4F] flex items-center gap-0.5 font-bold hover:underline"
-                                title="Retry sending"
-                              >
-                                <AlertCircle className="h-3 w-3" />
-                                <span>Retry</span>
-                              </button>
-                            )}
-                          </>
-                        )}
-                      </div>
-                    </div>
+                  </div>
+                  <div className="flex items-center justify-between text-[10px] font-bold text-[#202020]/75 mt-1 font-mono">
+                    <span>{formatSeconds(msg.audioDuration || 6)}</span>
+                    <span>{msg.time} • ✓✓</span>
                   </div>
                 </div>
               ) : (
@@ -1157,9 +1125,8 @@ export default function InboxPage() {
         {/* Dynamic Reply Bar / Voice Message Experience */}
         <div className="p-4 bg-white border-t-2 border-[#202020]">
           {voiceState === 'recording' || voiceState === 'paused' ? (
-            /* 1. Live Recording Interface (with Pause, Resume, Stop/Finish, and Cancel) */
+            /* Recording Interface */
             <div className="flex flex-wrap items-center justify-between gap-3 bg-[#fee2e2]/70 border-2 border-[#E35A4F] rounded-[24px] px-5 py-3 animate-in fade-in duration-150">
-              {/* Indicator & Duration */}
               <div className="flex items-center gap-3">
                 <span
                   className={`w-3.5 h-3.5 rounded-full ${
@@ -1176,27 +1143,11 @@ export default function InboxPage() {
                 </div>
               </div>
 
-              {/* Animated waveform bars (live) */}
-              <div className="hidden sm:flex items-center gap-1 h-6">
-                {[30, 80, 50, 100, 60, 90, 40, 85, 70, 95, 55, 75, 45, 90].map((h, i) => (
-                  <span
-                    key={i}
-                    style={{ height: `${h}%` }}
-                    className={`w-1 rounded-full transition-all ${
-                      voiceState === 'recording' ? 'bg-[#E35A4F] animate-pulse' : 'bg-[#E35A4F]/40'
-                    }`}
-                  />
-                ))}
-              </div>
-
-              {/* Action Buttons: Pause/Resume, Finish/Stop, Cancel/Delete */}
               <div className="flex items-center gap-2">
-                {/* Pause / Resume Button */}
                 {voiceState === 'recording' ? (
                   <button
                     onClick={handlePauseRecording}
-                    className="px-3 py-2 bg-white text-[#202020] hover:bg-[#F4EFE7] rounded-[16px] border-2 border-[#202020] flex items-center gap-1.5 text-xs font-bold transition-all"
-                    title="Pause recording"
+                    className="px-3 py-2 bg-white text-[#202020] hover:bg-[#F4EFE7] rounded-[16px] border-2 border-[#202020] flex items-center gap-1.5 text-xs font-bold"
                   >
                     <Pause className="h-3.5 w-3.5" />
                     <span>Pause</span>
@@ -1204,43 +1155,36 @@ export default function InboxPage() {
                 ) : (
                   <button
                     onClick={handleResumeRecording}
-                    className="px-3 py-2 bg-[#72A4F2] text-[#202020] hover:bg-[#5f93e2] rounded-[16px] border-2 border-[#202020] flex items-center gap-1.5 text-xs font-bold transition-all"
-                    title="Resume recording"
+                    className="px-3 py-2 bg-[#72A4F2] text-[#202020] rounded-[16px] border-2 border-[#202020] flex items-center gap-1.5 text-xs font-bold"
                   >
                     <Play className="h-3.5 w-3.5 fill-[#202020]" />
                     <span>Resume</span>
                   </button>
                 )}
 
-                {/* Finish / Stop Recording Button (transitions to Preview) */}
                 <button
                   onClick={handleFinishRecording}
-                  className="px-3.5 py-2 bg-[#202020] text-white hover:bg-black rounded-[16px] border-2 border-[#202020] flex items-center gap-1.5 text-xs font-bold shadow-xs transition-all"
-                  title="Finish recording and review"
+                  className="px-3.5 py-2 bg-[#202020] text-white rounded-[16px] border-2 border-[#202020] flex items-center gap-1.5 text-xs font-bold shadow-xs"
                 >
                   <Square className="h-3.5 w-3.5 fill-white" />
                   <span>Finish</span>
                 </button>
 
-                {/* Cancel / Discard Recording */}
                 <button
                   onClick={handleDiscardRecording}
-                  className="p-2 text-[#991b1b] hover:bg-[#fee2e2] rounded-[16px] border-2 border-[#E35A4F] transition-colors"
-                  title="Discard recording"
+                  className="p-2 text-[#991b1b] hover:bg-[#fee2e2] rounded-[16px] border-2 border-[#E35A4F]"
                 >
                   <Trash2 className="h-4 w-4" />
                 </button>
               </div>
             </div>
           ) : voiceState === 'preview' ? (
-            /* 2. Voice Message Preview Interface (Listen, Scrubber, Record Again, Delete, Send) */
-            <div className="flex flex-wrap items-center justify-between gap-3 bg-[#BED0F7]/40 border-2 border-[#202020] rounded-[24px] px-5 py-3 animate-in fade-in zoom-in-98 duration-150">
+            /* Preview Interface */
+            <div className="flex flex-wrap items-center justify-between gap-3 bg-[#BED0F7]/40 border-2 border-[#202020] rounded-[24px] px-5 py-3">
               <div className="flex items-center gap-3">
-                {/* Play / Pause button */}
                 <button
                   onClick={handleTogglePreviewPlayback}
-                  className="w-10 h-10 rounded-full bg-[#202020] text-white flex items-center justify-center shrink-0 hover:scale-105 active:scale-95 transition-transform"
-                  title={isPlayingPreview ? 'Pause preview' : 'Listen to preview'}
+                  className="w-10 h-10 rounded-full bg-[#202020] text-white flex items-center justify-center shrink-0"
                 >
                   {isPlayingPreview ? (
                     <Pause className="h-4 w-4 fill-white" />
@@ -1248,66 +1192,24 @@ export default function InboxPage() {
                     <Play className="h-4 w-4 fill-white ml-0.5" />
                   )}
                 </button>
-
-                {/* Progress bar and audio time */}
-                <div className="flex flex-col min-w-36">
-                  <div className="flex items-center justify-between text-[11px] font-mono font-bold text-[#202020]">
-                    <span>{formatSeconds(previewCurrentTime)}</span>
-                    <span className="text-[#202020]/60">/ {formatSeconds(recordingSeconds || 5)}</span>
-                  </div>
-                  <div className="w-full bg-[#202020]/20 h-1.5 rounded-full mt-1 overflow-hidden">
-                    <div
-                      className="bg-[#202020] h-full rounded-full transition-all duration-100"
-                      style={{
-                        width: `${Math.min(
-                          100,
-                          ((previewCurrentTime || 0) / (recordingSeconds || 5)) * 100
-                        )}%`,
-                      }}
-                    />
-                  </div>
-                </div>
+                <span className="font-mono font-bold text-xs">
+                  {formatSeconds(recordingSeconds || 6)}
+                </span>
               </div>
 
-              {/* Waveform preview graphic */}
-              <div className="hidden md:flex items-center gap-1 h-6">
-                {[40, 75, 45, 90, 60, 100, 50, 85, 70, 60, 95, 65, 40, 80].map((h, i) => (
-                  <span
-                    key={i}
-                    style={{ height: `${h}%` }}
-                    className={`w-1 rounded-full ${isPlayingPreview ? 'bg-[#202020] animate-pulse' : 'bg-[#202020]/40'}`}
-                  />
-                ))}
-              </div>
-
-              {/* Action Controls: Discard, Record Again, Send */}
               <div className="flex items-center gap-2">
                 <button
                   onClick={handleDiscardRecording}
-                  className="p-2 text-[#991b1b] hover:bg-[#fee2e2] rounded-[16px] border-2 border-[#202020] transition-colors"
-                  title="Delete voice note"
+                  className="p-2 text-[#991b1b] hover:bg-[#fee2e2] rounded-[16px] border-2 border-[#202020]"
                 >
                   <Trash2 className="h-4 w-4" />
-                </button>
-
-                <button
-                  onClick={() => {
-                    handleDiscardRecording();
-                    handleStartRecording();
-                  }}
-                  className="px-3 py-2 bg-white text-[#202020] hover:bg-[#F4EFE7] rounded-[16px] border-2 border-[#202020] flex items-center gap-1.5 text-xs font-bold transition-all"
-                  title="Record again"
-                >
-                  <RotateCcw className="h-3.5 w-3.5" />
-                  <span>Record Again</span>
                 </button>
 
                 <Button
                   variant="primary"
                   size="md"
-                  className="gap-1.5 bg-[#72A4F2] text-[#202020] border-2 border-[#202020] font-bold"
+                  className="gap-1.5 font-bold"
                   onClick={handleSendVoiceMessage}
-                  title="Send verified voice note to customer"
                 >
                   <Send className="h-3.5 w-3.5" />
                   <span>Send Voice Message</span>
@@ -1315,13 +1217,22 @@ export default function InboxPage() {
               </div>
             </div>
           ) : (
-            /* 3. Standard Text Input Mode with Mic & Send buttons */
-            <div className="flex items-center gap-3">
+            /* Standard Text Input Mode */
+            <div className="flex items-center gap-2">
               <button
-                className="p-2.5 text-[#202020] hover:bg-[#F4EFE7] rounded-[16px] border-2 border-[#202020] transition-colors"
-                title="Attach document or media"
+                className="p-2.5 text-[#202020] hover:bg-[#F4EFE7] rounded-[16px] border-2 border-[#202020] transition-colors shrink-0"
+                title="Attach media or document"
               >
                 <Paperclip className="h-4 w-4" />
+              </button>
+
+              {/* Canned Quick Responses Button (Phase 5) */}
+              <button
+                onClick={() => setShowCannedModal(true)}
+                className="p-2.5 text-[#202020] bg-[#BED0F7]/40 hover:bg-[#BED0F7] rounded-[16px] border-2 border-[#202020] transition-colors shrink-0 flex items-center gap-1 text-xs font-bold"
+                title="Quick Responses / Canned Snippets (/greet, /hours, etc.)"
+              >
+                <Sparkles className="h-4 w-4 text-[#202020]" />
               </button>
 
               <input
@@ -1337,176 +1248,168 @@ export default function InboxPage() {
                 disabled={!windowStatus.isActive}
                 placeholder={
                   windowStatus.isActive
-                    ? 'Type a reply or click the mic to record a voice message with pause/preview...'
-                    : 'Customer service window expired. Send an approved template message to re-initiate.'
+                    ? 'Type a reply, use / for quick replies, or click mic for voice note...'
+                    : 'Customer service window expired. Use an approved template.'
                 }
-                className="flex-1 text-xs border-2 border-[#202020] rounded-[20px] px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#72A4F2] disabled:bg-[#F4EFE7] disabled:cursor-not-allowed font-medium"
+                className="flex-1 px-4 py-2.5 text-xs bg-[#F9F6F1] border-2 border-[#202020] rounded-[18px] focus:outline-none focus:ring-2 focus:ring-[#72A4F2] font-medium disabled:opacity-60"
               />
 
-              {/* Voice Message (Mic) Button */}
+              {/* Mic button for voice recording */}
               <button
                 onClick={handleStartRecording}
                 disabled={!windowStatus.isActive}
-                className={`p-2.5 rounded-[16px] border-2 border-[#202020] transition-all flex items-center justify-center ${
-                  windowStatus.isActive
-                    ? 'bg-[#F4EFE7] hover:bg-[#72A4F2] text-[#202020] active:scale-95'
-                    : 'bg-[#F4EFE7]/50 text-[#202020]/30 cursor-not-allowed'
-                }`}
-                title={
-                  windowStatus.isActive
-                    ? 'Record WhatsApp Voice Message with Pause & Preview'
-                    : 'Voice notes locked (24h customer service window expired)'
-                }
+                className="p-2.5 text-[#202020] bg-[#BED0F7]/50 hover:bg-[#BED0F7] rounded-[16px] border-2 border-[#202020] transition-colors shrink-0 disabled:opacity-50"
+                title="Record voice message (mic)"
               >
                 <Mic className="h-4 w-4" />
               </button>
 
-              {/* Send Text Button */}
+              {/* Send button */}
               <Button
                 variant="primary"
                 size="md"
-                disabled={!windowStatus.isActive || !replyText.trim()}
-                className="gap-1.5"
                 onClick={handleSendReply}
+                disabled={!windowStatus.isActive || !replyText.trim()}
+                className="gap-2 font-bold shrink-0"
               >
                 <Send className="h-3.5 w-3.5" />
-                Send
+                <span>Send</span>
               </Button>
             </div>
           )}
         </div>
       </div>
 
-      {/* Column 3: Contact Context & Notes */}
-      <div className="w-80 border-l-2 border-[#202020] bg-white flex flex-col shrink-0">
-        <div className="p-6 border-b-2 border-[#202020] text-center bg-[#F9F6F1]">
-          <div className="w-14 h-14 rounded-[18px] bg-[#72A4F2] border-2 border-[#202020] text-[#202020] font-black text-base font-serif mx-auto flex items-center justify-center">
-            {selectedChat.name.slice(0, 2).toUpperCase()}
-          </div>
-          <h3 className="font-bold font-serif text-sm text-[#202020] mt-2.5">{selectedChat.name}</h3>
-          <p className="text-xs text-[#202020]/60 font-mono mt-0.5">{selectedChat.phone}</p>
-        </div>
-
-        {/* Tab switcher */}
-        <div className="flex border-b-2 border-[#202020] text-xs font-bold">
-          <button
-            onClick={() => setActiveTab('messages')}
-            className={`flex-1 py-3 text-center border-b-4 ${
-              activeTab === 'messages' ? 'border-[#202020] text-[#202020] bg-[#BED0F7]/30' : 'border-transparent text-[#202020]/60'
-            }`}
-          >
-            Profile & Consent
-          </button>
-          <button
-            onClick={() => setActiveTab('notes')}
-            className={`flex-1 py-3 text-center border-b-4 ${
-              activeTab === 'notes' ? 'border-[#202020] text-[#202020] bg-[#BED0F7]/30' : 'border-transparent text-[#202020]/60'
-            }`}
-          >
-            Internal Notes ({notes.length})
-          </button>
-        </div>
-
-        <div className="flex-1 p-5 space-y-4 overflow-y-auto text-xs">
-          {activeTab === 'messages' ? (
-            <>
-              <div>
-                <span className="text-[10px] font-bold text-[#202020]/60 uppercase tracking-wider block mb-1.5">
-                  Consent Verification
-                </span>
-                <div className="p-3.5 bg-[#ecfdf5] border-2 border-[#202020] rounded-[18px]">
-                  <div className="flex items-center gap-1.5 text-[#065f46] font-bold text-xs">
-                    <CheckCheck className="h-4 w-4 text-[#065f46]" />
-                    Verified WhatsApp Opt-In
-                  </div>
-                  <p className="text-[10px] text-[#065f46]/80 mt-1 font-medium">Source: Online Checkout Checkbox</p>
-                  <p className="text-[9px] text-[#065f46]/70">Captured: 12 Oct 2026 14:20 UTC</p>
-                </div>
+      {/* MODAL 1: CANNED RESPONSES PICKER (Phase 5) */}
+      {showCannedModal && (
+        <div className="fixed inset-0 bg-[#202020]/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-[32px] border-2 border-[#202020] max-w-md w-full p-6 shadow-2xl animate-in zoom-in-95 duration-200 space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b-2 border-[#202020]">
+              <div className="flex items-center gap-2">
+                <Sparkles className="h-5 w-5 text-[#72A4F2]" />
+                <h3 className="font-serif font-bold text-base text-[#202020]">
+                  Canned Quick Responses
+                </h3>
               </div>
+              <button
+                onClick={() => setShowCannedModal(false)}
+                className="text-lg font-black text-[#202020]/60 hover:text-black"
+              >
+                ✕
+              </button>
+            </div>
 
-              <div>
-                <span className="text-[10px] font-bold text-[#202020]/60 uppercase tracking-wider block mb-1.5">Tags</span>
-                <div className="flex flex-wrap gap-1.5">
-                  {selectedChat.tags.map((t) => (
-                    <Badge key={t} variant="charcoal" size="sm">
-                      {t}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <span className="text-[10px] font-bold text-[#202020]/60 uppercase tracking-wider block mb-1.5">Team Assignment</span>
-                <div className="p-3 bg-[#F9F6F1] border-2 border-[#202020] rounded-[16px] space-y-2">
-                  <div className="flex justify-between">
-                    <span className="text-[#202020]/60">Department:</span>
-                    <span className="font-bold">{selectedChat.team}</span>
+            <div className="space-y-2 max-h-72 overflow-y-auto">
+              {CANNED_RESPONSES.map((item) => (
+                <div
+                  key={item.id}
+                  onClick={() => handleSelectCanned(item.content)}
+                  className="p-3 bg-[#F9F6F1] hover:bg-[#BED0F7]/40 border-2 border-[#202020] rounded-[18px] cursor-pointer transition-all space-y-1"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-xs text-[#202020]">{item.title}</span>
+                    <span className="font-mono text-[10px] bg-white border border-[#202020] px-2 py-0.5 rounded-full font-bold">
+                      {item.shortcut}
+                    </span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-[#202020]/60">Assigned Agent:</span>
-                    <span className="font-bold">{selectedChat.assignedTo}</span>
-                  </div>
-                </div>
-              </div>
-            </>
-          ) : (
-            <div className="space-y-3">
-              {notes.map((note) => (
-                <div key={note.id} className="p-3.5 bg-[#fef9c3] border-2 border-[#202020] rounded-[18px] text-xs text-[#854d0e]">
-                  <span className="font-bold block font-serif">{note.author}:</span>
-                  <p className="mt-1 font-medium leading-relaxed">{note.text}</p>
-                  <span className="text-[9px] text-[#854d0e]/70 block mt-1.5 font-bold">{note.time}</span>
+                  <p className="text-[11px] text-[#202020]/75 line-clamp-2">{item.content}</p>
                 </div>
               ))}
+            </div>
 
-              <div className="pt-2 space-y-2">
+            <div className="flex justify-end pt-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowCannedModal(false)}
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 2: DEPARTMENT TRIAGE & THREAD REASSIGNMENT (Phase 5) */}
+      {showTransferModal && (
+        <div className="fixed inset-0 bg-[#202020]/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-[32px] border-2 border-[#202020] max-w-md w-full p-6 shadow-2xl animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between pb-3 border-b-2 border-[#202020]">
+              <div className="flex items-center gap-2">
+                <Forward className="h-5 w-5 text-[#72A4F2]" />
+                <h3 className="font-serif font-bold text-base text-[#202020]">
+                  Transfer Conversation
+                </h3>
+              </div>
+              <button
+                onClick={() => setShowTransferModal(false)}
+                className="text-lg font-black text-[#202020]/60 hover:text-black"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleExecuteTransfer} className="space-y-4 mt-4 text-xs">
+              <div>
+                <label className="font-bold text-[#202020] block mb-1">
+                  Target Department *
+                </label>
+                <select
+                  value={transferDept}
+                  onChange={(e) => setTransferDept(e.target.value as DepartmentName)}
+                  className="w-full px-3 py-2 bg-[#F9F6F1] border-2 border-[#202020] rounded-[18px] focus:outline-none font-bold"
+                >
+                  <option value="Customer Support">Customer Support</option>
+                  <option value="Sales Desk">Sales Desk</option>
+                  <option value="Compliance">Compliance & Legal</option>
+                  <option value="Technical Operations">Technical Operations</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="font-bold text-[#202020] block mb-1">
+                  Assign to Specific Agent
+                </label>
+                <select
+                  value={transferAgent}
+                  onChange={(e) => setTransferAgent(e.target.value)}
+                  className="w-full px-3 py-2 bg-[#F9F6F1] border-2 border-[#202020] rounded-[18px] focus:outline-none font-bold"
+                >
+                  <option value="Sarah Jenkins">Sarah Jenkins (Sales Desk)</option>
+                  <option value="Chethan Reddy">Chethan Reddy (Support)</option>
+                  <option value="Rahul Sharma">Rahul Sharma (Compliance)</option>
+                  <option value="Tariq Mansoor">Tariq Mansoor (Technical)</option>
+                  <option value="Unassigned">Leave Unassigned in Queue</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="font-bold text-[#202020] block mb-1">
+                  Internal Transfer Handover Note
+                </label>
                 <textarea
-                  value={newNoteText}
-                  onChange={(e) => setNewNoteText(e.target.value)}
-                  placeholder="Add an internal note (never visible to customer)..."
-                  rows={3}
-                  className="w-full text-xs p-3 border-2 border-[#202020] rounded-[18px] focus:outline-none focus:ring-2 focus:ring-[#72A4F2] font-medium"
-                ></textarea>
-                <Button variant="secondary" size="sm" className="w-full" onClick={handleAddNote}>
-                  Add Note
+                  rows={2}
+                  placeholder="e.g. Customer needs quote confirmation for bulk cosmetic order..."
+                  value={transferNote}
+                  onChange={(e) => setTransferNote(e.target.value)}
+                  className="w-full px-3 py-2 bg-[#F9F6F1] border-2 border-[#202020] rounded-[18px] focus:outline-none"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowTransferModal(false)}
+                >
+                  Cancel
+                </Button>
+                <Button type="submit" variant="primary" size="sm" className="font-bold">
+                  Transfer Conversation
                 </Button>
               </div>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Template Selection Modal */}
-      {isTemplateModalOpen && (
-        <div className="fixed inset-0 bg-[#202020]/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-[32px] max-w-md w-full p-6 border-2 border-[#202020] space-y-4">
-            <h3 className="text-base font-bold font-serif text-[#202020]">Select Approved Template</h3>
-            <p className="text-xs text-[#202020]/70">
-              The 24-hour service window has expired. Choose an approved Meta template to re-engage this customer.
-            </p>
-            <div className="space-y-2">
-              <button
-                onClick={() => {
-                  alert('Template "customer_reengagement" dispatched to Meta Cloud API.');
-                  setIsTemplateModalOpen(false);
-                }}
-                className="w-full text-left p-3 border-2 border-[#202020] rounded-[18px] hover:bg-[#BED0F7]/40 text-xs font-bold"
-              >
-                customer_reengagement (Marketing)
-              </button>
-              <button
-                onClick={() => {
-                  alert('Template "order_update" dispatched to Meta Cloud API.');
-                  setIsTemplateModalOpen(false);
-                }}
-                className="w-full text-left p-3 border-2 border-[#202020] rounded-[18px] hover:bg-[#BED0F7]/40 text-xs font-bold"
-              >
-                order_update (Utility)
-              </button>
-            </div>
-            <Button variant="outline" size="sm" className="w-full" onClick={() => setIsTemplateModalOpen(false)}>
-              Cancel
-            </Button>
+            </form>
           </div>
         </div>
       )}
