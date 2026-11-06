@@ -8,9 +8,11 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "test": "node --test scripts/test-runner.mjs"
+    "test": "node --test scripts/test-runner.mjs",
+    "db:migrate:neon": "node scripts/migrate-neon.mjs"
   },
   "dependencies": {
+    "@neondatabase/serverless": "^1.2.0",
     "@supabase/ssr": "^0.5.2",
     "@supabase/supabase-js": "^2.48.1",
     "clsx": "^2.1.1",
@@ -31,4 +33,3 @@
     "typescript": "^5.7.3"
   }
 }
-
