@@ -36,6 +36,7 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { EmbeddedSignupModal } from '@/components/settings/embedded-signup-modal';
+import { MetaIntegrationCard } from '@/components/settings/meta-integration-card';
 
 interface TeamMember {
   id: string;
@@ -711,6 +712,9 @@ export default function SettingsPage() {
                   </div>
                 </div>
               </Card>
+
+              {/* Meta Webhook & OAuth Endpoint Configuration */}
+              <MetaIntegrationCard />
             </div>
           )}
 
@@ -1029,6 +1033,9 @@ export default function SettingsPage() {
                   </div>
                 </div>
               </Card>
+
+              {/* Meta Webhook & OAuth Endpoint Configuration */}
+              <MetaIntegrationCard />
             </div>
           )}
 

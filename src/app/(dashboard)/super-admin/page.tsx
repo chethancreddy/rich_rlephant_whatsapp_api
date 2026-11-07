@@ -26,6 +26,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { DETAILED_PLANS, type DetailedPlanInfo } from '@/lib/services/subscription-service';
 import type { PlanTier } from '@/lib/services/billing-service';
+import { MetaIntegrationCard } from '@/components/settings/meta-integration-card';
 
 interface CustomerTenant {
   id: string;
@@ -118,6 +119,7 @@ export default function SuperAdminPage() {
   const [selectedCustomer, setSelectedCustomer] = useState<CustomerTenant | null>(null);
 
   // Modal states
+  const [adminTab, setAdminTab] = useState<'workspaces' | 'integrations'>('workspaces');
   const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
   const [isResetPasswordModalOpen, setIsResetPasswordModalOpen] = useState(false);
 
@@ -303,74 +305,104 @@ export default function SuperAdminPage() {
         </Card>
       </div>
 
-      {/* Tenants Table */}
-      <Card
-        title="Customer Tenant Workspaces & Subscription Control"
-        subtitle="Manage customer plans, view real-time usage vs limits, and handle security credentials without file exports"
-      >
-        <div className="overflow-x-auto text-xs">
-          <table className="w-full text-left">
-            <thead className="bg-[#F9F6F1] text-[#202020] uppercase font-bold border-b-2 border-[#202020]">
-              <tr>
-                <th className="py-3 px-4">Workspace / Tenant</th>
-                <th className="py-3 px-4">Current Plan</th>
-                <th className="py-3 px-4">Contact Usage</th>
-                <th className="py-3 px-4">Assets</th>
-                <th className="py-3 px-4">Quality Rating</th>
-                <th className="py-3 px-4">Status</th>
-                <th className="py-3 px-4 text-right">Customer Management</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[#F4EFE7]">
-              {customers.map((c) => (
-                <tr key={c.id} className="hover:bg-[#F9F6F1]/50">
-                  <td className="py-3.5 px-4 font-bold text-[#202020]">
-                    {c.name}
-                    <span className="block text-[10px] text-[#202020]/50 font-mono font-normal">
-                      slug: {c.slug} | {c.adminEmail}
-                    </span>
-                  </td>
-                  <td className="py-3.5 px-4">
-                    <Badge variant={c.planCode === 'enterprise' ? 'charcoal' : 'blue'} size="sm">
-                      {DETAILED_PLANS[c.planCode].name} (${c.planPriceUsd}/mo)
-                    </Badge>
-                  </td>
-                  <td className="py-3.5 px-4 font-mono font-semibold">
-                    {c.contactUsage.toLocaleString()} / {c.contactLimit.toLocaleString()}
-                    <div className="w-24 bg-[#E5DFD5] h-1.5 rounded-full mt-1 overflow-hidden">
-                      <div
-                        className="bg-[#72A4F2] h-full rounded-full"
-                        style={{ width: `${Math.min(100, (c.contactUsage / c.contactLimit) * 100)}%` }}
-                      />
-                    </div>
-                  </td>
-                  <td className="py-3.5 px-4 font-mono font-medium text-[#202020]">
-                    {c.wabaCount} WABA | {c.phoneCount} Numbers
-                  </td>
-                  <td className="py-3.5 px-4">
-                    <span className="text-[#065f46] font-bold bg-[#ecfdf5] border border-[#6ee7b7] px-2.5 py-0.5 rounded-full">
-                      {c.qualityRating}
-                    </span>
-                  </td>
-                  <td className="py-3.5 px-4">
-                    <Badge variant="green" size="sm">Active</Badge>
-                  </td>
-                  <td className="py-3.5 px-4 text-right">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="text-xs font-bold"
-                      onClick={() => handleOpenDetails(c)}
-                    >
-                      Customer Details
-                    </Button>
-                  </td>
+      {/* Super Admin Navigation Tabs */}
+      <div className="flex flex-wrap items-center gap-3 border-b-2 border-[#202020] pb-3">
+        <button
+          onClick={() => setAdminTab('workspaces')}
+          className={`px-4 py-2 font-serif font-bold text-xs rounded-[16px] border-2 border-[#202020] transition-all flex items-center gap-2 ${
+            adminTab === 'workspaces'
+              ? 'bg-[#72A4F2] text-[#202020] shadow-[3px_3px_0px_#202020]'
+              : 'bg-white text-[#202020]/70 hover:bg-[#F9F6F1]'
+          }`}
+        >
+          <Building2 className="h-4 w-4" />
+          Customer Workspaces &amp; Subscriptions
+        </button>
+        <button
+          onClick={() => setAdminTab('integrations')}
+          className={`px-4 py-2 font-serif font-bold text-xs rounded-[16px] border-2 border-[#202020] transition-all flex items-center gap-2 ${
+            adminTab === 'integrations'
+              ? 'bg-[#72A4F2] text-[#202020] shadow-[3px_3px_0px_#202020]'
+              : 'bg-white text-[#202020]/70 hover:bg-[#F9F6F1]'
+          }`}
+        >
+          <ShieldCheck className="h-4 w-4" />
+          Settings &rarr; Integrations &rarr; Meta WhatsApp
+        </button>
+      </div>
+
+      {adminTab === 'integrations' ? (
+        <MetaIntegrationCard />
+      ) : (
+        /* Tenants Table */
+        <Card
+          title="Customer Tenant Workspaces & Subscription Control"
+          subtitle="Manage customer plans, view real-time usage vs limits, and handle security credentials without file exports"
+        >
+          <div className="overflow-x-auto text-xs">
+            <table className="w-full text-left">
+              <thead className="bg-[#F9F6F1] text-[#202020] uppercase font-bold border-b-2 border-[#202020]">
+                <tr>
+                  <th className="py-3 px-4">Workspace / Tenant</th>
+                  <th className="py-3 px-4">Current Plan</th>
+                  <th className="py-3 px-4">Contact Usage</th>
+                  <th className="py-3 px-4">Assets</th>
+                  <th className="py-3 px-4">Quality Rating</th>
+                  <th className="py-3 px-4">Status</th>
+                  <th className="py-3 px-4 text-right">Customer Management</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Card>
+              </thead>
+              <tbody className="divide-y divide-[#F4EFE7]">
+                {customers.map((c) => (
+                  <tr key={c.id} className="hover:bg-[#F9F6F1]/50">
+                    <td className="py-3.5 px-4 font-bold text-[#202020]">
+                      {c.name}
+                      <span className="block text-[10px] text-[#202020]/50 font-mono font-normal">
+                        slug: {c.slug} | {c.adminEmail}
+                      </span>
+                    </td>
+                    <td className="py-3.5 px-4">
+                      <Badge variant={c.planCode === 'enterprise' ? 'charcoal' : 'blue'} size="sm">
+                        {DETAILED_PLANS[c.planCode].name} (${c.planPriceUsd}/mo)
+                      </Badge>
+                    </td>
+                    <td className="py-3.5 px-4 font-mono font-semibold">
+                      {c.contactUsage.toLocaleString()} / {c.contactLimit.toLocaleString()}
+                      <div className="w-24 bg-[#E5DFD5] h-1.5 rounded-full mt-1 overflow-hidden">
+                        <div
+                          className="bg-[#72A4F2] h-full rounded-full"
+                          style={{ width: `${Math.min(100, (c.contactUsage / c.contactLimit) * 100)}%` }}
+                        />
+                      </div>
+                    </td>
+                    <td className="py-3.5 px-4 font-mono font-medium text-[#202020]">
+                      {c.wabaCount} WABA | {c.phoneCount} Numbers
+                    </td>
+                    <td className="py-3.5 px-4">
+                      <span className="text-[#065f46] font-bold bg-[#ecfdf5] border border-[#6ee7b7] px-2.5 py-0.5 rounded-full">
+                        {c.qualityRating}
+                      </span>
+                    </td>
+                    <td className="py-3.5 px-4">
+                      <Badge variant="green" size="sm">Active</Badge>
+                    </td>
+                    <td className="py-3.5 px-4 text-right">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-xs font-bold"
+                        onClick={() => handleOpenDetails(c)}
+                      >
+                        Customer Details
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
 
       {/* Customer Details Drawer / Modal */}
       {selectedCustomer && (
