@@ -91,6 +91,14 @@ CREATE TABLE IF NOT EXISTS audit_logs (
     created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc', now())
 );
 
+-- Ensure user_id column exists if audit_logs was pre-created with actor_id
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'audit_logs' AND column_name = 'user_id') THEN
+        ALTER TABLE audit_logs ADD COLUMN user_id UUID REFERENCES users(id) ON DELETE SET NULL;
+    END IF;
+END $$;
+
 -- 4. Indexes for Performance
 CREATE INDEX IF NOT EXISTS idx_contacts_created_by ON contacts(created_by_user_id);
 CREATE INDEX IF NOT EXISTS idx_contacts_opt_in_source ON contacts(opt_in_source_id);

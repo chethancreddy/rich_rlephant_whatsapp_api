@@ -9,7 +9,7 @@
     "start": "next start",
     "lint": "next lint",
     "test": "node --test scripts/test-runner.mjs",
-    "db:migrate:neon": "node scripts/migrate-neon.mjs"
+    "db:migrate:neon": "node --env-file-if-exists=.env.local scripts/migrate-neon.mjs"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.2.0",

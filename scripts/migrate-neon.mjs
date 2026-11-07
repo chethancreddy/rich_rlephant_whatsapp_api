@@ -9,7 +9,36 @@ import { fileURLToPath } from 'node:url';
 import { Pool } from '@neondatabase/serverless';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const migrationsDir = path.resolve(__dirname, '../supabase/migrations');
+const rootDir = path.resolve(__dirname, '..');
+const migrationsDir = path.resolve(rootDir, 'supabase/migrations');
+
+// Helper to auto-load .env.local and .env if present
+function loadEnvFile(fileName) {
+  const filePath = path.join(rootDir, fileName);
+  if (!fs.existsSync(filePath)) return;
+  try {
+    const raw = fs.readFileSync(filePath, 'utf-8');
+    for (const line of raw.split('\n')) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) continue;
+      const eqIdx = trimmed.indexOf('=');
+      if (eqIdx === -1) continue;
+      const key = trimmed.slice(0, eqIdx).trim();
+      let val = trimmed.slice(eqIdx + 1).trim();
+      if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+        val = val.slice(1, -1);
+      }
+      if (!process.env[key]) {
+        process.env[key] = val;
+      }
+    }
+  } catch (err) {
+    // Ignore load errors
+  }
+}
+
+loadEnvFile('.env.local');
+loadEnvFile('.env');
 
 const connectionString = process.env.DATABASE_URL;
 
@@ -80,3 +109,4 @@ async function runNeonMigrations() {
 }
 
 runNeonMigrations();
+

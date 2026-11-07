@@ -3,6 +3,29 @@
 -- Rich Rlephant Marketing Whatsapp API
 -- ============================================================================
 
+-- Ensure auth schema, roles, and helper functions exist (Neon & Supabase compatible)
+CREATE SCHEMA IF NOT EXISTS auth;
+
+DO $$ 
+BEGIN
+    IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'authenticated') THEN
+        CREATE ROLE authenticated;
+    END IF;
+    IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'anon') THEN
+        CREATE ROLE anon;
+    END IF;
+END $$;
+
+CREATE OR REPLACE FUNCTION auth.uid()
+RETURNS UUID AS $$
+    SELECT NULLIF(current_setting('request.jwt.claim.sub', true), '')::UUID;
+$$ LANGUAGE sql STABLE;
+
+CREATE OR REPLACE FUNCTION auth.role()
+RETURNS TEXT AS $$
+    SELECT COALESCE(current_setting('request.jwt.claim.role', true), 'anon');
+$$ LANGUAGE sql STABLE;
+
 -- Helper function: Get user_id from auth.uid()
 CREATE OR REPLACE FUNCTION current_app_user_id()
 RETURNS UUID AS $$
