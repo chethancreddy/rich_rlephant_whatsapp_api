@@ -89,14 +89,25 @@ export async function POST(req: NextRequest) {
           for (const ev of processedEvents) {
             if (ev.eventType === 'message_status' && ev.messageId && ev.newStatus) {
               const statusCol =
-                ev.newStatus === 'read' ? 'read_at' : ev.newStatus === 'delivered' ? 'delivered_at' : 'sent_at';
+                ev.newStatus === 'read'
+                  ? 'read_at'
+                  : ev.newStatus === 'delivered'
+                  ? 'delivered_at'
+                  : ev.newStatus === 'failed'
+                  ? 'failed_at'
+                  : 'sent_at';
               await client.query(
                 `
                 UPDATE messages 
-                SET status = $1, ${statusCol} = NOW(), updated_at = NOW() 
+                SET 
+                  status = $1,
+                  error_code = COALESCE($3, error_code),
+                  error_message = COALESCE($4, error_message),
+                  ${statusCol} = NOW(),
+                  updated_at = NOW() 
                 WHERE provider_message_id = $2
                 `,
-                [ev.newStatus, ev.messageId]
+                [ev.newStatus, ev.messageId, ev.errorCode || null, ev.errorMessage || null]
               );
             } else if (ev.eventType === 'inbound_message' && ev.contactPhone) {
               // 1. Resolve tenant ID from phone_numbers table

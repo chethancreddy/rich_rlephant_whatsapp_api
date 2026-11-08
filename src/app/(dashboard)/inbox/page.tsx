@@ -383,15 +383,28 @@ export default function InboxPage() {
     try {
       if (typeof navigator !== 'undefined' && navigator.mediaDevices?.getUserMedia) {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        const mimeType = getSupportedAudioMimeType();
-        const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
 
-        recorder.ondataavailable = (e) => {
-          if (e.data.size > 0) audioChunksRef.current.push(e.data);
+        let recorder: any = null;
+        try {
+          const OpusMediaRecorder = (await import('opus-media-recorder')).default;
+          const workerOptions = {
+            OggOpusEncoderWasmPath: '/opus/OggOpusEncoder.wasm',
+            WebMOpusEncoderWasmPath: '/opus/WebMOpusEncoder.wasm',
+            encoderWorkerFactory: () => new Worker('/opus/encoderWorker.umd.js'),
+          };
+          recorder = new OpusMediaRecorder(stream, { mimeType: 'audio/ogg' }, workerOptions);
+        } catch (polyErr) {
+          console.warn('[OpusPolyfill Fallback]', polyErr);
+          const mimeType = getSupportedAudioMimeType();
+          recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+        }
+
+        recorder.ondataavailable = (e: any) => {
+          if (e.data && e.data.size > 0) audioChunksRef.current.push(e.data);
         };
 
         recorder.onstop = () => {
-          const finalMime = recorder.mimeType || 'audio/ogg; codecs=opus';
+          const finalMime = recorder.mimeType || 'audio/ogg';
           const blob = new Blob(audioChunksRef.current, { type: finalMime });
           setPreviewAudioBlob(blob);
           const url = URL.createObjectURL(blob);

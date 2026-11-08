@@ -34,6 +34,8 @@ export interface ProcessedEventResult {
   contactName?: string;
   phoneNumberId?: string;
   wabaId?: string;
+  errorCode?: string;
+  errorMessage?: string;
 }
 
 const OPT_OUT_KEYWORDS = new Set(['STOP', 'UNSUBSCRIBE', 'CANCEL', 'OPT OUT', 'END', 'QUIT']);
@@ -83,11 +85,14 @@ export function processMetaWebhookEvent(entry: any): ProcessedEventResult[] {
     // 2. Process Outbound Message Delivery Status Updates
     if (value.statuses && Array.isArray(value.statuses)) {
       for (const st of value.statuses as MetaWebhookStatus[]) {
+        const firstError = st.errors?.[0];
         results.push({
           eventType: 'message_status',
           success: true,
           messageId: st.id,
           newStatus: st.status,
+          errorCode: firstError?.code ? String(firstError.code) : undefined,
+          errorMessage: firstError ? `${firstError.title}: ${firstError.message}` : undefined,
         });
       }
     }

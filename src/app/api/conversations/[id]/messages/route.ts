@@ -163,6 +163,7 @@ export async function POST(
         };
       } else if (messageType === 'audio') {
         let audioMediaId = body.mediaId;
+        let isOgg = false;
 
         // If audioBase64 provided, upload binary directly to Meta Media API
         if (!audioMediaId && body.audioBase64) {
@@ -170,10 +171,18 @@ export async function POST(
             const cleanBase64 = body.audioBase64.replace(/^data:audio\/\w+(?:;\s*codecs=[^;]+)?;base64,/, '');
             const audioBuffer = Buffer.from(cleanBase64, 'base64');
 
+            // Inspect container magic bytes: OggS = genuine Ogg Opus
+            const isOggHeader =
+              audioBuffer.length >= 4 && audioBuffer.subarray(0, 4).toString('ascii') === 'OggS';
+            isOgg = isOggHeader;
+
+            const detectedMime = isOggHeader ? 'audio/ogg' : (body.mimeType || 'audio/mp4');
+            const detectedFilename = isOggHeader ? 'voice_note.ogg' : 'voice_note.mp4';
+
             const formData = new FormData();
-            const audioBlob = new Blob([audioBuffer], { type: 'audio/ogg' });
-            formData.append('file', audioBlob, 'voice_note.ogg');
-            formData.append('type', 'audio/ogg');
+            const audioBlob = new Blob([audioBuffer], { type: detectedMime });
+            formData.append('file', audioBlob, detectedFilename);
+            formData.append('type', detectedMime);
             formData.append('messaging_product', 'whatsapp');
 
             const mediaUploadRes = await fetch(
@@ -192,9 +201,17 @@ export async function POST(
               audioMediaId = mediaData.id;
             } else {
               console.error('[Meta Media Upload Error]', mediaData);
+              return NextResponse.json(
+                { error: mediaData?.error?.message || 'Meta Media API upload failed' },
+                { status: 400 }
+              );
             }
-          } catch (uploadErr) {
+          } catch (uploadErr: any) {
             console.error('[Audio Buffer Upload Exception]', uploadErr);
+            return NextResponse.json(
+              { error: uploadErr.message || 'Failed to process audio recording' },
+              { status: 500 }
+            );
           }
         }
 
@@ -202,11 +219,13 @@ export async function POST(
           payload.type = 'audio';
           payload.audio = {
             id: audioMediaId,
+            voice: isOgg, // Meta requires verified Ogg Opus for native voice notes
           };
         } else if (mediaUrl) {
           payload.type = 'audio';
           payload.audio = {
             link: mediaUrl,
+            voice: true,
           };
         }
       } else {
