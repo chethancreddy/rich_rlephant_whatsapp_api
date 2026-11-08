@@ -30,6 +30,10 @@ export interface ProcessedEventResult {
   contactPhone?: string;
   newStatus?: string;
   isOptOut?: boolean;
+  textBody?: string;
+  contactName?: string;
+  phoneNumberId?: string;
+  wabaId?: string;
 }
 
 const OPT_OUT_KEYWORDS = new Set(['STOP', 'UNSUBSCRIBE', 'CANCEL', 'OPT OUT', 'END', 'QUIT']);
@@ -44,11 +48,16 @@ export function processMetaWebhookEvent(entry: any): ProcessedEventResult[] {
     return results;
   }
 
+  const wabaId = entry.id;
+
   for (const change of entry.changes) {
     const value = change.value;
     if (!value || value.messaging_product !== 'whatsapp') {
       continue;
     }
+
+    const phoneNumberId = value.metadata?.phone_number_id;
+    const contactProfileName = value.contacts?.[0]?.profile?.name;
 
     // 1. Process Inbound Messages
     if (value.messages && Array.isArray(value.messages)) {
@@ -63,6 +72,10 @@ export function processMetaWebhookEvent(entry: any): ProcessedEventResult[] {
           messageId: msg.id,
           contactPhone: phoneResult.e164 || `+${msg.from}`,
           isOptOut,
+          textBody,
+          contactName: contactProfileName || 'WhatsApp Customer',
+          phoneNumberId,
+          wabaId,
         });
       }
     }

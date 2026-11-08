@@ -94,6 +94,7 @@ export default function InboxPage() {
   const [messagesMap, setMessagesMap] = useState<Record<string, MessageItem[]>>({});
   const [activeTab, setActiveTab] = useState<'messages' | 'notes'>('messages');
   const [replyText, setReplyText] = useState('');
+  const [isSending, setIsSending] = useState(false);
 
   // Mobile View Switcher: 'list' (shows conversation sidebar) or 'chat' (shows active thread canvas)
   const [mobileView, setMobileView] = useState<'list' | 'chat'>('list');
@@ -141,20 +142,54 @@ export default function InboxPage() {
   const [newNoteText, setNewNoteText] = useState('');
   const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
 
-  // Fetch real conversations from Neon Serverless PostgreSQL
+  // Fetch real conversations from Neon Serverless PostgreSQL with auto-polling
   useEffect(() => {
-    fetch('/api/conversations')
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.success && Array.isArray(data.conversations)) {
-          setConversations(data.conversations);
-          if (data.conversations.length > 0) {
-            setSelectedChat(data.conversations[0]);
+    const loadConversations = () => {
+      fetch('/api/conversations')
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.success && Array.isArray(data.conversations)) {
+            setConversations(data.conversations);
+            setSelectedChat((curr) => {
+              if (!curr && data.conversations.length > 0) return data.conversations[0];
+              if (curr) {
+                const updated = data.conversations.find((c: any) => c.id === curr.id);
+                return updated ? { ...curr, ...updated } : curr;
+              }
+              return curr;
+            });
           }
-        }
-      })
-      .catch(() => {});
+        })
+        .catch(() => {});
+    };
+
+    loadConversations();
+    const interval = setInterval(loadConversations, 5000);
+    return () => clearInterval(interval);
   }, []);
+
+  // Fetch real message thread for selected conversation with auto-polling
+  useEffect(() => {
+    if (!selectedChat?.id) return;
+
+    const loadMessages = () => {
+      fetch(`/api/conversations/${selectedChat.id}/messages`)
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.success && Array.isArray(data.messages)) {
+            setMessagesMap((prev) => ({
+              ...prev,
+              [selectedChat.id]: data.messages,
+            }));
+          }
+        })
+        .catch(() => {});
+    };
+
+    loadMessages();
+    const interval = setInterval(loadMessages, 3000);
+    return () => clearInterval(interval);
+  }, [selectedChat?.id]);
 
   const hasCollision = false;
   const windowStatus = calculateServiceWindow(selectedChat?.lastMessageAt);
@@ -421,17 +456,21 @@ export default function InboxPage() {
   };
 
   const handleSendReply = async () => {
-    if (!selectedChat || !replyText.trim()) return;
+    if (!selectedChat || !replyText.trim() || isSending) return;
 
     const sentText = replyText.trim();
+    setReplyText('');
+    setIsSending(true);
+
+    const tempId = `m_${Date.now()}`;
     const newMsg: MessageItem = {
-      id: `m_${Date.now()}`,
+      id: tempId,
       conversationId: selectedChat.id,
       sender: 'agent',
       type: 'text',
       text: sentText,
-      time: 'Just now',
-      status: 'delivered',
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      status: 'sending',
     };
 
     setMessagesMap((prev) => ({
@@ -439,27 +478,48 @@ export default function InboxPage() {
       [selectedChat.id]: [...(prev[selectedChat.id] || []), newMsg],
     }));
 
-    setConversations((prev) =>
-      prev.map((c) =>
-        c.id === selectedChat.id
-          ? {
-              ...c,
-              lastMessage: sentText,
-              lastMessageAt: new Date().toISOString(),
-              isCustomerLastInbound: false,
-            }
-          : c
-      )
-    );
+    try {
+      const res = await fetch(`/api/conversations/${selectedChat.id}/messages`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messageBody: sentText }),
+      });
+      const data = await res.json();
 
-    setSelectedChat((prev) => prev ? ({
-      ...prev,
-      lastMessage: sentText,
-      lastMessageAt: new Date().toISOString(),
-      isCustomerLastInbound: false,
-    }) : null);
+      if (res.ok && data.success) {
+        setMessagesMap((prev) => ({
+          ...prev,
+          [selectedChat.id]: (prev[selectedChat.id] || []).map((m) =>
+            m.id === tempId ? { ...m, status: 'sent', id: data.message_id || m.id } : m
+          ),
+        }));
 
-    setReplyText('');
+        setConversations((prev) =>
+          prev.map((c) =>
+            c.id === selectedChat.id
+              ? {
+                  ...c,
+                  lastMessage: sentText,
+                  lastMessageAt: new Date().toISOString(),
+                  isCustomerLastInbound: false,
+                }
+              : c
+          )
+        );
+      } else {
+        alert(data.error || 'Failed to dispatch reply message.');
+        setMessagesMap((prev) => ({
+          ...prev,
+          [selectedChat.id]: (prev[selectedChat.id] || []).map((m) =>
+            m.id === tempId ? { ...m, status: 'failed', errorMessage: data.error } : m
+          ),
+        }));
+      }
+    } catch (err: any) {
+      console.error('[Send Reply Error]', err);
+    } finally {
+      setIsSending(false);
+    }
   };
 
   const handleAddNote = async () => {

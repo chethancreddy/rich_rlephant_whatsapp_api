@@ -8,12 +8,17 @@ import { getNeonPool } from '@/lib/db/neon';
 
 export async function GET(req: NextRequest) {
   try {
-    const tenantId = req.headers.get('x-tenant-id');
+    const pool = getNeonPool();
+
+    let tenantId = req.headers.get('x-tenant-id');
     if (!tenantId) {
-      return NextResponse.json({ success: true, count: 0, conversations: [] });
+      // Resolve tenant from database or fallback to the primary active tenant
+      const fallbackTenantRes = await pool.query(
+        `SELECT id FROM tenants WHERE slug = 'dr-fit-veda' OR status = 'active' ORDER BY created_at ASC LIMIT 1`
+      );
+      tenantId = fallbackTenantRes.rows[0]?.id || '9acfe96e-b425-44a1-b40d-9f85c586679d';
     }
 
-    const pool = getNeonPool();
     const result = await pool.query(
       `
       SELECT 
@@ -41,7 +46,7 @@ export async function GET(req: NextRequest) {
 
     const conversations = result.rows.map((row) => ({
       id: row.id,
-      name: row.name || 'Anonymous',
+      name: row.name || 'Customer',
       phone: row.phone,
       lastMessage: row.lastMessage,
       lastMessageAt: row.lastMessageAt ? new Date(row.lastMessageAt).toISOString() : new Date().toISOString(),
@@ -50,7 +55,7 @@ export async function GET(req: NextRequest) {
       team: row.team,
       status: row.status || 'open',
       isCustomerLastInbound: true,
-      tags: ['Live DB'],
+      tags: ['WhatsApp Cloud API'],
     }));
 
     return NextResponse.json({
@@ -63,4 +68,3 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ success: true, count: 0, conversations: [] });
   }
 }
-

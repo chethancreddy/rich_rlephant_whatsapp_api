@@ -34,38 +34,24 @@ interface WorkspaceItem {
 
 const INITIAL_WORKSPACES: WorkspaceItem[] = [
   {
-    id: 'ws_001',
-    name: 'Acme Dubai Retail',
-    tier: 'Growth Tier • UAE',
-    phone: '+971 50 123 4567',
+    id: 'ws_default',
+    name: 'My Workspace',
+    tier: 'Production • Meta Cloud API',
+    phone: '',
     color: '#72A4F2',
-  },
-  {
-    id: 'ws_002',
-    name: 'Alpha Real Estate Dubai',
-    tier: 'Enterprise Tier • UAE',
-    phone: '+971 50 111 2233',
-    color: '#065f46',
-  },
-  {
-    id: 'ws_003',
-    name: 'Beta Luxury Auto Spa',
-    tier: 'Growth Tier • UAE',
-    phone: '+971 50 444 5566',
-    color: '#d97706',
-  },
-  {
-    id: 'ws_004',
-    name: 'Gamma Hospitality',
-    tier: 'Starter Tier • UAE',
-    phone: '+971 50 777 8899',
-    color: '#7c3aed',
   },
 ];
 
-const NAVIGATION_ITEMS = [
+interface NavigationItem {
+  name: string;
+  href: string;
+  icon: any;
+  badge?: string;
+}
+
+const NAVIGATION_ITEMS: NavigationItem[] = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-  { name: 'Shared Inbox', href: '/inbox', icon: MessageSquare, badge: '3' },
+  { name: 'Shared Inbox', href: '/inbox', icon: MessageSquare },
   { name: 'Contacts & Consent', href: '/contacts', icon: Users },
   { name: 'Bulk Campaigns', href: '/campaigns', icon: Send },
   { name: 'Templates', href: '/templates', icon: FileText },
@@ -83,6 +69,38 @@ export const Sidebar: React.FC = () => {
   const [activeWorkspace, setActiveWorkspace] = useState<WorkspaceItem>(INITIAL_WORKSPACES[0]);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+
+  // Fetch live workspace details & unread inbox count
+  const [inboxUnread, setInboxUnread] = useState(0);
+
+  useEffect(() => {
+    fetch('/api/workspace/overview')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.workspace?.name) {
+          const ws: WorkspaceItem = {
+            id: data.workspace.id,
+            name: data.workspace.name,
+            tier: `${data.workspace.status || 'Active'} Tier • Meta Cloud API`,
+            phone: data.phoneNumbers?.[0]?.displayPhoneNumber || '',
+            color: '#72A4F2',
+          };
+          setWorkspaces([ws]);
+          setActiveWorkspace(ws);
+        }
+      })
+      .catch(() => {});
+
+    fetch('/api/conversations')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.conversations && Array.isArray(data.conversations)) {
+          const unreadSum = data.conversations.reduce((sum: number, c: any) => sum + (c.unread || 0), 0);
+          setInboxUnread(unreadSum);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   // New Workspace Form State
   const [newWsName, setNewWsName] = useState('');
@@ -273,9 +291,9 @@ export const Sidebar: React.FC = () => {
                 <Icon className="h-4 w-4 shrink-0 text-[#202020]" />
                 <span>{item.name}</span>
               </div>
-              {item.badge && (
+              {((item.href === '/inbox' && inboxUnread > 0) || item.badge) && (
                 <span className="bg-[#202020] text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
-                  {item.badge}
+                  {item.href === '/inbox' && inboxUnread > 0 ? inboxUnread : item.badge}
                 </span>
               )}
             </Link>
