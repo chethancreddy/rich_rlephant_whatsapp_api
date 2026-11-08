@@ -91,15 +91,21 @@ export const Sidebar: React.FC = () => {
       })
       .catch(() => {});
 
-    fetch('/api/conversations')
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.conversations && Array.isArray(data.conversations)) {
-          const unreadSum = data.conversations.reduce((sum: number, c: any) => sum + (c.unread || 0), 0);
-          setInboxUnread(unreadSum);
-        }
-      })
-      .catch(() => {});
+    const updateUnread = () => {
+      fetch('/api/conversations')
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.conversations && Array.isArray(data.conversations)) {
+            const unreadSum = data.conversations.reduce((sum: number, c: any) => sum + (c.unread || 0), 0);
+            setInboxUnread(unreadSum);
+          }
+        })
+        .catch(() => {});
+    };
+
+    updateUnread();
+    const interval = setInterval(updateUnread, 5000);
+    return () => clearInterval(interval);
   }, []);
 
   // New Workspace Form State

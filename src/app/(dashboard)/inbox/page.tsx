@@ -151,7 +151,18 @@ export default function InboxPage() {
           if (data.success && Array.isArray(data.conversations)) {
             setConversations(data.conversations);
             setSelectedChat((curr) => {
-              if (!curr && data.conversations.length > 0) return data.conversations[0];
+              if (!curr && data.conversations.length > 0) {
+                const first = data.conversations[0];
+                if (first.unread > 0) {
+                  fetch(`/api/conversations/${first.id}/read`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ markRead: true }),
+                  }).catch(() => {});
+                  return { ...first, unread: 0 };
+                }
+                return first;
+              }
               if (curr) {
                 const updated = data.conversations.find((c: any) => c.id === curr.id);
                 return updated ? { ...curr, ...updated } : curr;
@@ -206,11 +217,20 @@ export default function InboxPage() {
 
   const unreadTotal = conversations.filter((c) => c.unread > 0 && !c.isArchived).length;
 
+  const markConversationAsReadInDb = (id: string, markRead: boolean = true) => {
+    fetch(`/api/conversations/${id}/read`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ markRead }),
+    }).catch(() => {});
+  };
+
   const handleSelectChat = (chat: ConversationItem) => {
     if (chat.unread > 0) {
       setConversations((prev) =>
         prev.map((c) => (c.id === chat.id ? { ...c, unread: 0 } : c))
       );
+      markConversationAsReadInDb(chat.id, true);
     }
     setSelectedChat({ ...chat, unread: 0 });
     setMobileView('chat');
@@ -219,28 +239,34 @@ export default function InboxPage() {
 
   const handleToggleReadStatus = (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
+    const target = conversations.find((c) => c.id === id);
+    const nextUnread = target && target.unread > 0 ? 0 : 1;
+
     setConversations((prev) =>
       prev.map((c) => {
         if (c.id === id) {
-          const next = c.unread > 0 ? 0 : 1;
           if (selectedChat && selectedChat.id === id) {
-            setSelectedChat((curr) => curr ? ({ ...curr, unread: next }) : null);
+            setSelectedChat((curr) => curr ? ({ ...curr, unread: nextUnread }) : null);
           }
-          return { ...c, unread: next };
+          return { ...c, unread: nextUnread };
         }
         return c;
       })
     );
+    markConversationAsReadInDb(id, nextUnread === 0);
   };
 
   const handleToggleCurrentChatRead = () => {
     if (!selectedChat) return;
     const isCurrentlyUnread = selectedChat.unread > 0;
     const nextUnread = isCurrentlyUnread ? 0 : 1;
+    const currentId = selectedChat.id;
+
     setConversations((prev) =>
-      prev.map((c) => (c.id === selectedChat.id ? { ...c, unread: nextUnread } : c))
+      prev.map((c) => (c.id === currentId ? { ...c, unread: nextUnread } : c))
     );
     setSelectedChat((curr) => curr ? ({ ...curr, unread: nextUnread }) : null);
+    markConversationAsReadInDb(currentId, nextUnread === 0);
   };
 
   // Bulk Operations
@@ -260,11 +286,19 @@ export default function InboxPage() {
   };
 
   const handleBulkMarkRead = (markRead: boolean) => {
-    setConversations((prev) => bulkUpdateReadStatus(prev, selectedIds, markRead));
-    if (selectedChat && selectedIds.includes(selectedChat.id)) {
+    if (selectedIds.length === 0) return;
+    const targetIds = [...selectedIds];
+    setConversations((prev) => bulkUpdateReadStatus(prev, targetIds, markRead));
+    if (selectedChat && targetIds.includes(selectedChat.id)) {
       setSelectedChat((curr) => curr ? ({ ...curr, unread: markRead ? 0 : 1 }) : null);
     }
     setSelectedIds([]);
+
+    fetch('/api/conversations/bulk-read', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ conversationIds: targetIds, markRead }),
+    }).catch(() => {});
   };
 
   const handleBulkArchive = () => {
