@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
         c.unread_count as unread,
         c.status,
         c.priority,
-        COALESCE(u.full_name, 'Unassigned') as "assignedTo",
+        COALESCE(u.display_name, 'Unassigned') as "assignedTo",
         COALESCE(t.name, 'Customer Support') as team,
         c.service_window_expires_at as "serviceWindowExpiresAt"
       FROM conversations c
