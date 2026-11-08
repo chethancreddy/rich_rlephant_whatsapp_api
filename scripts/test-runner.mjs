@@ -36,6 +36,7 @@ const files = [
   path.join(testDir, 'phase-06-developer-api.test.mjs'),
   path.join(testDir, 'phase-07-settings-module.test.mjs'),
   path.join(securityDir, 'rls-tenant-isolation.test.mjs'),
+  path.join(securityDir, 'auth-and-access-control.test.mjs'),
   path.join(e2eDir, 'e2e-scenarios.test.mjs'),
   path.join(e2eDir, 'performance-and-load.test.mjs'),
 ];

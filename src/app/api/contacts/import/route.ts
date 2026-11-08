@@ -24,7 +24,13 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const { contacts, defaultCountryCode = 'AE', tenantId: reqTenantId } = body;
-    const tenantId = req.headers.get('x-tenant-id') || reqTenantId || DEFAULT_TENANT_ID;
+    const authenticatedTenantId = req.headers.get('x-tenant-id');
+    const isSuperAdmin = req.headers.get('x-is-super-admin') === 'true';
+
+    // Strict multi-tenant isolation: Never trust browser-submitted tenantId
+    const tenantId = isSuperAdmin
+      ? reqTenantId || authenticatedTenantId || DEFAULT_TENANT_ID
+      : authenticatedTenantId || DEFAULT_TENANT_ID;
 
     if (!contacts || !Array.isArray(contacts) || contacts.length === 0) {
       return NextResponse.json(

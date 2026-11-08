@@ -15,7 +15,17 @@ const DEFAULT_TENANT_ID = '00000000-0000-0000-0000-000000000001';
  */
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
-  const tenantId = req.headers.get('x-tenant-id') || searchParams.get('tenantId') || DEFAULT_TENANT_ID;
+  const authenticatedTenantId = req.headers.get('x-tenant-id');
+  const isSuperAdmin = req.headers.get('x-is-super-admin') === 'true';
+
+  // Strict multi-tenant isolation: Only Super Admin can override tenantId
+  const tenantId = isSuperAdmin
+    ? searchParams.get('tenantId') || authenticatedTenantId || DEFAULT_TENANT_ID
+    : authenticatedTenantId || DEFAULT_TENANT_ID;
+
+  if (!tenantId) {
+    return NextResponse.json({ error: 'UNAUTHORIZED: Valid workspace session required' }, { status: 401 });
+  }
 
   try {
     const pool = getNeonPool();
@@ -61,7 +71,18 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const tenantId = req.headers.get('x-tenant-id') || body.tenantId || DEFAULT_TENANT_ID;
+    const authenticatedTenantId = req.headers.get('x-tenant-id');
+    const isSuperAdmin = req.headers.get('x-is-super-admin') === 'true';
+    const userId = req.headers.get('x-user-id');
+
+    // Strict multi-tenant isolation: Never trust browser tenantId
+    const tenantId = isSuperAdmin
+      ? body.tenantId || authenticatedTenantId || DEFAULT_TENANT_ID
+      : authenticatedTenantId || DEFAULT_TENANT_ID;
+
+    if (!tenantId) {
+      return NextResponse.json({ error: 'UNAUTHORIZED: Valid workspace session required' }, { status: 401 });
+    }
     const { name, phone, email, consentGiven = true, consentCategory = 'MARKETING', optInSourceId } = body;
 
     if (!phone) {

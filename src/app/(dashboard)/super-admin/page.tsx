@@ -27,6 +27,7 @@ import { Button } from '@/components/ui/button';
 import { DETAILED_PLANS, type DetailedPlanInfo } from '@/lib/services/subscription-service';
 import type { PlanTier } from '@/lib/services/billing-service';
 import { MetaIntegrationCard } from '@/components/settings/meta-integration-card';
+import { SecurityDashboardTab } from '@/components/super-admin/security-dashboard-tab';
 
 interface CustomerTenant {
   id: string;
@@ -119,7 +120,7 @@ export default function SuperAdminPage() {
   const [selectedCustomer, setSelectedCustomer] = useState<CustomerTenant | null>(null);
 
   // Modal states
-  const [adminTab, setAdminTab] = useState<'workspaces' | 'integrations'>('workspaces');
+  const [adminTab, setAdminTab] = useState<'workspaces' | 'integrations' | 'security'>('workspaces');
   const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
   const [isResetPasswordModalOpen, setIsResetPasswordModalOpen] = useState(false);
 
@@ -319,6 +320,17 @@ export default function SuperAdminPage() {
           Customer Workspaces &amp; Subscriptions
         </button>
         <button
+          onClick={() => setAdminTab('security')}
+          className={`px-4 py-2 font-serif font-bold text-xs rounded-[16px] border-2 border-[#202020] transition-all flex items-center gap-2 ${
+            adminTab === 'security'
+              ? 'bg-[#72A4F2] text-[#202020] shadow-[3px_3px_0px_#202020]'
+              : 'bg-white text-[#202020]/70 hover:bg-[#F9F6F1]'
+          }`}
+        >
+          <Lock className="h-4 w-4" />
+          Enterprise Security &amp; Audit Management
+        </button>
+        <button
           onClick={() => setAdminTab('integrations')}
           className={`px-4 py-2 font-serif font-bold text-xs rounded-[16px] border-2 border-[#202020] transition-all flex items-center gap-2 ${
             adminTab === 'integrations'
@@ -331,7 +343,9 @@ export default function SuperAdminPage() {
         </button>
       </div>
 
-      {adminTab === 'integrations' ? (
+      {adminTab === 'security' ? (
+        <SecurityDashboardTab />
+      ) : adminTab === 'integrations' ? (
         <MetaIntegrationCard />
       ) : (
         /* Tenants Table */

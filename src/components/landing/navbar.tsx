@@ -121,7 +121,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenDemo, onOpenTrial }) => {
 
           {/* Action CTAs */}
           <div className="hidden sm:flex items-center gap-3">
-            <Link href="/dashboard">
+            <Link href="/login">
               <Button variant="outline" size="sm" className="font-bold text-xs bg-white">
                 Log In
               </Button>
@@ -136,15 +136,16 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenDemo, onOpenTrial }) => {
               Book a Demo
             </Button>
 
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={onOpenTrial}
-              className="font-bold text-xs gap-1.5 shadow-[3px_3px_0px_#202020]"
-            >
-              <span>Start Free Trial</span>
-              <ArrowRight className="h-3.5 w-3.5" />
-            </Button>
+            <Link href="/register">
+              <Button
+                variant="primary"
+                size="sm"
+                className="font-bold text-xs gap-1.5 shadow-[3px_3px_0px_#202020]"
+              >
+                <span>Start Free Trial</span>
+                <ArrowRight className="h-3.5 w-3.5" />
+              </Button>
+            </Link>
           </div>
 
           {/* Mobile Menu Button */}
@@ -211,7 +212,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenDemo, onOpenTrial }) => {
           </div>
 
           <div className="flex flex-col gap-2 pt-2">
-            <Link href="/dashboard" className="w-full">
+            <Link href="/login" className="w-full">
               <Button variant="outline" size="md" className="w-full font-bold">
                 Log In to Workspace
               </Button>
@@ -227,17 +228,15 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenDemo, onOpenTrial }) => {
             >
               Book a Live Demo
             </Button>
-            <Button
-              variant="primary"
-              size="md"
-              onClick={() => {
-                setIsMobileMenuOpen(false);
-                onOpenTrial();
-              }}
-              className="w-full font-bold"
-            >
-              Start Free Trial (14 Days)
-            </Button>
+            <Link href="/register" className="w-full">
+              <Button
+                variant="primary"
+                size="md"
+                className="w-full font-bold"
+              >
+                Start Free Trial (14 Days)
+              </Button>
+            </Link>
           </div>
         </div>
       )}

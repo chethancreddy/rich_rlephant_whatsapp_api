@@ -11,6 +11,11 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const isSuperAdmin = req.headers.get('x-is-super-admin') === 'true';
+    if (!isSuperAdmin) {
+      return NextResponse.json({ error: 'FORBIDDEN: Super Admin privileges required' }, { status: 403 });
+    }
+
     const { id } = await params;
     const body = await req.json();
 
