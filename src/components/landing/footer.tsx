@@ -123,14 +123,14 @@ export const Footer: React.FC = () => {
                 </Link>
               </li>
               <li>
-                <span className="hover:text-white transition-colors cursor-pointer">
+                <Link href="/privacy-policy" className="hover:text-white transition-colors">
                   Privacy Policy
-                </span>
+                </Link>
               </li>
               <li>
-                <span className="hover:text-white transition-colors cursor-pointer">
+                <Link href="/terms" className="hover:text-white transition-colors">
                   Terms &amp; Conditions
-                </span>
+                </Link>
               </li>
               <li>
                 <span className="hover:text-white transition-colors cursor-pointer">
@@ -172,3 +172,4 @@ export const Footer: React.FC = () => {
     </footer>
   );
 };
+

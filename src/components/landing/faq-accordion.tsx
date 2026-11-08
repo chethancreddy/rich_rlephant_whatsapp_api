@@ -85,3 +85,4 @@ export const FaqAccordion: React.FC = () => {
     </div>
   );
 };
+

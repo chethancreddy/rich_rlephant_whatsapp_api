@@ -226,3 +226,4 @@ export const DemoModal: React.FC<DemoModalProps> = ({ isOpen, onClose }) => {
     </div>
   );
 };
+

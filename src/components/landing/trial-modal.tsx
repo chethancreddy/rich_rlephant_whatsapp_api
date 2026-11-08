@@ -141,3 +141,4 @@ export const TrialModal: React.FC<TrialModalProps> = ({ isOpen, onClose }) => {
     </div>
   );
 };
+

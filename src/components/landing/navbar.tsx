@@ -244,3 +244,4 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenDemo, onOpenTrial }) => {
     </header>
   );
 };
+

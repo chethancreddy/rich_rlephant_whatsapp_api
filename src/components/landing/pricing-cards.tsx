@@ -206,3 +206,4 @@ export const PricingCards: React.FC<PricingCardsProps> = ({ onOpenTrial, onOpenD
     </div>
   );
 };
+
