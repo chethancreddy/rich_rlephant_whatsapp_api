@@ -162,10 +162,53 @@ export async function POST(
           language: { code: 'en_US' },
         };
       } else if (messageType === 'audio') {
-        payload.type = 'audio';
-        payload.audio = {
-          link: mediaUrl || 'https://audio.rich-rlephant.com/voicenote.ogg',
-        };
+        let audioMediaId = body.mediaId;
+
+        // If audioBase64 provided, upload binary directly to Meta Media API
+        if (!audioMediaId && body.audioBase64) {
+          try {
+            const cleanBase64 = body.audioBase64.replace(/^data:audio\/\w+(?:;\s*codecs=[^;]+)?;base64,/, '');
+            const audioBuffer = Buffer.from(cleanBase64, 'base64');
+
+            const formData = new FormData();
+            const audioBlob = new Blob([audioBuffer], { type: 'audio/ogg' });
+            formData.append('file', audioBlob, 'voice_note.ogg');
+            formData.append('type', 'audio/ogg');
+            formData.append('messaging_product', 'whatsapp');
+
+            const mediaUploadRes = await fetch(
+              `https://graph.facebook.com/v21.0/${metaPhoneId}/media`,
+              {
+                method: 'POST',
+                headers: {
+                  Authorization: `Bearer ${metaAccessToken}`,
+                },
+                body: formData,
+              }
+            );
+
+            const mediaData = await mediaUploadRes.json();
+            if (mediaUploadRes.ok && mediaData?.id) {
+              audioMediaId = mediaData.id;
+            } else {
+              console.error('[Meta Media Upload Error]', mediaData);
+            }
+          } catch (uploadErr) {
+            console.error('[Audio Buffer Upload Exception]', uploadErr);
+          }
+        }
+
+        if (audioMediaId) {
+          payload.type = 'audio';
+          payload.audio = {
+            id: audioMediaId,
+          };
+        } else if (mediaUrl) {
+          payload.type = 'audio';
+          payload.audio = {
+            link: mediaUrl,
+          };
+        }
       } else {
         payload.type = 'text';
         payload.text = {
@@ -228,6 +271,12 @@ export async function POST(
 
     const messageId = msgRes.rows[0]?.id;
 
+    // 6. Update conversation last message preview
+    const previewText =
+      messageType === 'audio'
+        ? '🎤 Voice Note'
+        : messageBody || (templateName ? `[Template: ${templateName}]` : 'Message');
+
     // 5. Store message payload body
     if (messageId) {
       await pool.query(
@@ -235,12 +284,9 @@ export async function POST(
         INSERT INTO conversation_messages (tenant_id, conversation_id, message_id, body, media_url)
         VALUES ($1, $2, $3, $4, $5)
         `,
-        [tenantId, conversationId, messageId, messageBody || templateName, mediaUrl || null]
+        [tenantId, conversationId, messageId, previewText, mediaUrl || null]
       );
     }
-
-    // 6. Update conversation last message preview
-    const previewText = messageBody || `[Template: ${templateName}]`;
     await pool.query(
       `
       UPDATE conversations

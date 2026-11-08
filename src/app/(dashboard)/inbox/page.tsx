@@ -468,17 +468,19 @@ export default function InboxPage() {
   };
 
   const handleSendVoiceMessage = async () => {
-    if (!selectedChat) return;
-    const duration = recordingSeconds || 6;
+    if (!selectedChat || isSending) return;
+    const duration = recordingSeconds || 5;
+
+    const tempId = `m_${Date.now()}`;
     const newMsg: MessageItem = {
-      id: `m_${Date.now()}`,
+      id: tempId,
       conversationId: selectedChat.id,
       sender: 'agent',
       type: 'voice',
       audioUrl: previewAudioUrl || undefined,
       audioDuration: duration,
-      time: 'Just now',
-      status: 'delivered',
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      status: 'sending',
     };
 
     setMessagesMap((prev) => ({
@@ -486,7 +488,66 @@ export default function InboxPage() {
       [selectedChat.id]: [...(prev[selectedChat.id] || []), newMsg],
     }));
 
-    handleDiscardRecording();
+    setIsSending(true);
+
+    try {
+      let audioBase64 = '';
+      if (previewAudioBlob) {
+        audioBase64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(previewAudioBlob);
+        });
+      }
+
+      const res = await fetch(`/api/conversations/${selectedChat.id}/messages`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messageType: 'audio',
+          audioBase64,
+          mimeType: previewAudioBlob?.type || 'audio/ogg',
+          duration,
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setMessagesMap((prev) => ({
+          ...prev,
+          [selectedChat.id]: (prev[selectedChat.id] || []).map((m) =>
+            m.id === tempId ? { ...m, status: 'sent', id: data.message_id || m.id } : m
+          ),
+        }));
+
+        setConversations((prev) =>
+          prev.map((c) =>
+            c.id === selectedChat.id
+              ? {
+                  ...c,
+                  lastMessage: '🎤 Voice Note',
+                  lastMessageAt: new Date().toISOString(),
+                  isCustomerLastInbound: false,
+                }
+              : c
+          )
+        );
+      } else {
+        alert(data.error || 'Failed to dispatch voice note.');
+        setMessagesMap((prev) => ({
+          ...prev,
+          [selectedChat.id]: (prev[selectedChat.id] || []).map((m) =>
+            m.id === tempId ? { ...m, status: 'failed', errorMessage: data.error } : m
+          ),
+        }));
+      }
+    } catch (err: any) {
+      console.error('[Send Voice Error]', err);
+    } finally {
+      setIsSending(false);
+      handleDiscardRecording();
+    }
   };
 
   const handleSendReply = async () => {
