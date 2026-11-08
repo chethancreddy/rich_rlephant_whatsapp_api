@@ -50,40 +50,13 @@ interface TeamMember {
 
 const INITIAL_TEAM: TeamMember[] = [
   {
-    id: 'usr_001',
-    name: 'Chethan Reddy',
-    email: 'chethan@example.com',
+    id: 'usr_owner',
+    name: 'Workspace Owner',
+    email: 'admin@workspace.local',
     role: 'workspace_owner',
     department: 'Customer Support',
     status: 'active',
-    lastActive: 'Just now',
-  },
-  {
-    id: 'usr_002',
-    name: 'Sarah Jenkins',
-    email: 'sarah@example.com',
-    role: 'agent',
-    department: 'Sales Desk',
-    status: 'active',
-    lastActive: '12 mins ago',
-  },
-  {
-    id: 'usr_003',
-    name: 'Rahul Sharma',
-    email: 'rahul@example.com',
-    role: 'manager',
-    department: 'Compliance',
-    status: 'active',
-    lastActive: '1 hour ago',
-  },
-  {
-    id: 'usr_004',
-    name: 'Tariq Mansoor',
-    email: 'tariq@example.com',
-    role: 'agent',
-    department: 'Customer Support',
-    status: 'invited',
-    lastActive: 'Pending invite acceptance',
+    lastActive: 'Active Now',
   },
 ];
 
@@ -116,13 +89,13 @@ export default function SettingsPage() {
   };
 
   // 1. Profile State
-  const [displayName, setDisplayName] = useState('Chethan Reddy');
-  const [jobTitle, setJobTitle] = useState('Principal Solutions Architect');
-  const [bio, setBio] = useState('Managing high-scale WhatsApp Business API operations.');
+  const [displayName, setDisplayName] = useState('Workspace Administrator');
+  const [jobTitle, setJobTitle] = useState('Account Owner');
+  const [bio, setBio] = useState('Managing WhatsApp Business API operations.');
 
   // 2. Account State
-  const [accountEmail, setAccountEmail] = useState('chethan@example.com');
-  const [accountPhone, setAccountPhone] = useState('+971 50 443 2190');
+  const [accountEmail, setAccountEmail] = useState('');
+  const [accountPhone, setAccountPhone] = useState('');
 
   // 3. Password State
   const [currentPassword, setCurrentPassword] = useState('');
@@ -133,29 +106,53 @@ export default function SettingsPage() {
   const [sessions, setSessions] = useState([
     {
       id: 'sess_01',
-      device: 'Chrome on Windows 11',
-      ip: '194.170.211.85 (Dubai, UAE)',
+      device: 'Current Browser Session',
+      ip: 'Encrypted TLS Session',
       isCurrent: true,
       lastActive: 'Active Now',
-    },
-    {
-      id: 'sess_02',
-      device: 'Safari on iPhone 16 Pro',
-      ip: '94.200.12.44 (Abu Dhabi, UAE)',
-      isCurrent: false,
-      lastActive: '3 hours ago',
     },
   ]);
 
   // 5. Workspace State
-  const [workspaceName, setWorkspaceName] = useState('Acme Dubai Retail');
-  const [workspaceSlug, setWorkspaceSlug] = useState('acme-dubai');
+  const [workspaceName, setWorkspaceName] = useState('My Workspace');
+  const [workspaceSlug, setWorkspaceSlug] = useState('workspace');
   const [workspaceEnv, setWorkspaceEnv] = useState<'production' | 'sandbox'>('production');
 
   // 6. Company State
-  const [companyLegalName, setCompanyLegalName] = useState('Acme Retail Middle East FZ-LLC');
-  const [companyVat, setCompanyVat] = useState('AE100293847500003');
-  const [companyAddress, setCompanyAddress] = useState('Dubai Internet City, Building 14, Office 402, Dubai, UAE');
+  const [companyLegalName, setCompanyLegalName] = useState('');
+  const [companyVat, setCompanyVat] = useState('');
+  const [companyAddress, setCompanyAddress] = useState('');
+
+  // Fetch real workspace profile
+  React.useEffect(() => {
+    fetch('/api/workspace/overview')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.workspace) {
+          if (data.workspace.name) setWorkspaceName(data.workspace.name);
+          if (data.workspace.slug) setWorkspaceSlug(data.workspace.slug);
+        }
+        if (data.user?.email) {
+          setAccountEmail(data.user.email);
+          setDisplayName(data.user.email.split('@')[0]);
+          setTeam([
+            {
+              id: 'usr_owner',
+              name: data.user.email.split('@')[0],
+              email: data.user.email,
+              role: 'workspace_owner',
+              department: 'General Management',
+              status: 'active',
+              lastActive: 'Active Now',
+            },
+          ]);
+        }
+        if (data.phoneNumbers && data.phoneNumbers.length > 0) {
+          setAccountPhone(data.phoneNumbers[0].displayPhoneNumber || '');
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   // 8. Notifications State
   const [notifDailyDigest, setNotifDailyDigest] = useState(true);

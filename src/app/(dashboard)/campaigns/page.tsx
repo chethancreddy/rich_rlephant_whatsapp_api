@@ -80,7 +80,7 @@ const APPROVED_TEMPLATES: ApprovedTemplate[] = [
     language: 'en',
     header: 'Delivery Notification',
     body: 'Dear {{1}}, order #{{2}} is currently out for delivery and will arrive shortly.',
-    footer: 'Customer Support: +971 50 123 4567',
+    footer: 'Customer Support Helpdesk',
     variables: ['{{1}}', '{{2}}'],
   },
   {
@@ -303,7 +303,31 @@ export default function CampaignsPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-[#F4EFE7]">
-              {campaigns.map((camp) => {
+              {campaigns.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="py-16 text-center">
+                    <div className="max-w-md mx-auto flex flex-col items-center">
+                      <div className="w-14 h-14 rounded-2xl bg-[#BED0F7]/30 border-2 border-[#202020] flex items-center justify-center mb-4">
+                        <Send className="w-7 h-7 text-[#202020]" />
+                      </div>
+                      <h3 className="text-base font-bold text-[#202020] mb-1">No Broadcast Campaigns Launched</h3>
+                      <p className="text-xs text-[#202020]/70 mb-5 text-center leading-relaxed">
+                        Launch compliant WhatsApp marketing or utility broadcasts with pre-approved Meta templates, variable personalization, and anti-ban pacing.
+                      </p>
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        onClick={() => setShowWizard(true)}
+                        className="gap-2 font-bold"
+                      >
+                        <PlusCircle className="w-4 h-4" />
+                        Create First Campaign
+                      </Button>
+                    </div>
+                  </td>
+                </tr>
+              ) : (
+                campaigns.map((camp) => {
                 const percent =
                   camp.eligibleRecipients > 0
                     ? Math.round((camp.sentCount / camp.eligibleRecipients) * 100)
@@ -425,7 +449,8 @@ export default function CampaignsPage() {
                     </td>
                   </tr>
                 );
-              })}
+              })
+            )}
             </tbody>
           </table>
         </div>

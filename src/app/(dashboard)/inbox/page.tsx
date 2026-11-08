@@ -82,200 +82,16 @@ interface MessageItem {
   errorMessage?: string;
 }
 
-const MOCK_CONVERSATIONS: ConversationItem[] = [
-  {
-    id: 'c1',
-    name: 'Tariq Mansoor',
-    phone: '+971 50 443 2190',
-    lastMessage: 'Can you please confirm my delivery window for order #9827?',
-    lastMessageAt: new Date(Date.now() - 45 * 60 * 1000).toISOString(), // 45 mins ago (ACTIVE)
-    unread: 1,
-    assignedTo: 'Chethan Reddy',
-    team: 'Customer Support',
-    status: 'open',
-    isCustomerLastInbound: true,
-    tags: ['VIP', 'Dubai Marina', 'Support'],
-  },
-  {
-    id: 'c2',
-    name: 'Fatima Al Zaabi',
-    phone: '+971 55 982 1102',
-    lastMessage: 'Thank you, that solved my issue!',
-    lastMessageAt: new Date(Date.now() - 26 * 60 * 60 * 1000).toISOString(), // 26 hrs ago (EXPIRED)
-    unread: 0,
-    assignedTo: 'Sarah Jenkins',
-    team: 'Sales Desk',
-    status: 'resolved',
-    isCustomerLastInbound: false,
-    tags: ['Retail', 'Resolved'],
-  },
-  {
-    id: 'c3',
-    name: 'Rahul Sharma',
-    phone: '+971 52 710 4433',
-    lastMessage: 'STOP',
-    lastMessageAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-    unread: 0,
-    assignedTo: 'Automated System',
-    team: 'Compliance',
-    status: 'pending',
-    isCustomerLastInbound: true,
-    tags: ['Suppressed', 'Opt-Out'],
-  },
-  {
-    id: 'c4',
-    name: 'Luxury Yacht Charter VIPs',
-    phone: '+971 50 999 8811',
-    lastMessage: 'Our group is ready for the weekend itinerary confirmation.',
-    lastMessageAt: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
-    unread: 2,
-    assignedTo: 'Chethan Reddy',
-    team: 'Customer Support',
-    status: 'open',
-    isCustomerLastInbound: true,
-    tags: ['Group', 'VIP', 'Dubai Harbour'],
-    isGroup: true,
-  },
-  {
-    id: 'c5',
-    name: 'Omar Al Futtaim',
-    phone: '+971 50 222 3344',
-    lastMessage: 'Contract document signed and delivered.',
-    lastMessageAt: new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString(),
-    unread: 0,
-    assignedTo: 'Tariq Mansoor',
-    team: 'Technical Operations',
-    status: 'open',
-    isCustomerLastInbound: false,
-    tags: ['Enterprise', 'Archived'],
-    isArchived: true,
-  },
-  {
-    id: 'c6',
-    name: 'Noor Al Shamsi',
-    phone: '+971 56 123 9988',
-    lastMessage: 'I would like to inquire about bulk wholesale pricing for cosmetics.',
-    lastMessageAt: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
-    unread: 1,
-    assignedTo: 'Unassigned',
-    team: 'Sales Desk',
-    status: 'open',
-    isCustomerLastInbound: true,
-    tags: ['Lead', 'Wholesale'],
-  },
-];
+const MOCK_CONVERSATIONS: ConversationItem[] = [];
 
-const INITIAL_MESSAGES: Record<string, MessageItem[]> = {
-  c1: [
-    {
-      id: 'm1',
-      conversationId: 'c1',
-      sender: 'customer',
-      type: 'text',
-      text: 'Can you please confirm my delivery window for order #9827?',
-      time: '11:45 AM',
-      status: 'read',
-    },
-    {
-      id: 'm2',
-      conversationId: 'c1',
-      sender: 'agent',
-      type: 'text',
-      text: 'Hello Tariq! Our delivery team is scheduled to arrive between 2:00 PM and 4:00 PM today.',
-      time: '11:47 AM',
-      status: 'delivered',
-    },
-    {
-      id: 'm3',
-      conversationId: 'c1',
-      sender: 'customer',
-      type: 'voice',
-      audioDuration: 8,
-      time: '11:49 AM',
-      status: 'read',
-    },
-  ],
-  c2: [
-    {
-      id: 'm201',
-      conversationId: 'c2',
-      sender: 'agent',
-      type: 'text',
-      text: 'Your warranty registration is confirmed. Is there anything else you need assistance with?',
-      time: 'Yesterday',
-      status: 'read',
-    },
-    {
-      id: 'm202',
-      conversationId: 'c2',
-      sender: 'customer',
-      type: 'text',
-      text: 'Thank you, that solved my issue!',
-      time: 'Yesterday',
-      status: 'read',
-    },
-  ],
-  c3: [
-    {
-      id: 'm301',
-      conversationId: 'c3',
-      sender: 'customer',
-      type: 'text',
-      text: 'STOP',
-      time: '2 hours ago',
-      status: 'read',
-    },
-    {
-      id: 'm302',
-      conversationId: 'c3',
-      sender: 'agent',
-      type: 'text',
-      text: 'You have been unsubscribed from updates. Reply START at any time to re-subscribe.',
-      time: '2 hours ago',
-      status: 'delivered',
-    },
-  ],
-  c4: [
-    {
-      id: 'm401',
-      conversationId: 'c4',
-      sender: 'customer',
-      type: 'text',
-      text: 'Our group is ready for the weekend itinerary confirmation.',
-      time: '12:15 PM',
-      status: 'read',
-    },
-  ],
-  c5: [
-    {
-      id: 'm501',
-      conversationId: 'c5',
-      sender: 'customer',
-      type: 'text',
-      text: 'Contract document signed and delivered.',
-      time: '2 days ago',
-      status: 'read',
-    },
-  ],
-  c6: [
-    {
-      id: 'm601',
-      conversationId: 'c6',
-      sender: 'customer',
-      type: 'text',
-      text: 'I would like to inquire about bulk wholesale pricing for cosmetics.',
-      time: '12:20 PM',
-      status: 'read',
-    },
-  ],
-};
+const INITIAL_MESSAGES: Record<string, MessageItem[]> = {};
 
 type VoiceState = 'idle' | 'recording' | 'paused' | 'preview' | 'sending';
 
 export default function InboxPage() {
-  const [conversations, setConversations] = useState<ConversationItem[]>(MOCK_CONVERSATIONS);
-  const [selectedChat, setSelectedChat] = useState<ConversationItem>(MOCK_CONVERSATIONS[0]);
-  const [messagesMap, setMessagesMap] = useState<Record<string, MessageItem[]>>(INITIAL_MESSAGES);
+  const [conversations, setConversations] = useState<ConversationItem[]>([]);
+  const [selectedChat, setSelectedChat] = useState<ConversationItem | null>(null);
+  const [messagesMap, setMessagesMap] = useState<Record<string, MessageItem[]>>({});
   const [activeTab, setActiveTab] = useState<'messages' | 'notes'>('messages');
   const [replyText, setReplyText] = useState('');
 
@@ -325,10 +141,24 @@ export default function InboxPage() {
   const [newNoteText, setNewNoteText] = useState('');
   const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
 
-  // Simulated agent collision: Chat c2 is currently being viewed by Sarah Jenkins
-  const hasCollision = selectedChat.id === 'c2';
-  const windowStatus = calculateServiceWindow(selectedChat.lastMessageAt);
-  const currentMessages = messagesMap[selectedChat.id] || [];
+  // Fetch real conversations from Neon Serverless PostgreSQL
+  useEffect(() => {
+    fetch('/api/conversations')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && Array.isArray(data.conversations)) {
+          setConversations(data.conversations);
+          if (data.conversations.length > 0) {
+            setSelectedChat(data.conversations[0]);
+          }
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const hasCollision = false;
+  const windowStatus = calculateServiceWindow(selectedChat?.lastMessageAt);
+  const currentMessages = selectedChat ? (messagesMap[selectedChat.id] || []) : [];
 
   // Filter conversations using Phase 5 Multi-View rules
   const filteredConversations = filterInboxConversations(conversations, {
@@ -358,8 +188,8 @@ export default function InboxPage() {
       prev.map((c) => {
         if (c.id === id) {
           const next = c.unread > 0 ? 0 : 1;
-          if (selectedChat.id === id) {
-            setSelectedChat((curr) => ({ ...curr, unread: next }));
+          if (selectedChat && selectedChat.id === id) {
+            setSelectedChat((curr) => curr ? ({ ...curr, unread: next }) : null);
           }
           return { ...c, unread: next };
         }
@@ -369,12 +199,13 @@ export default function InboxPage() {
   };
 
   const handleToggleCurrentChatRead = () => {
+    if (!selectedChat) return;
     const isCurrentlyUnread = selectedChat.unread > 0;
     const nextUnread = isCurrentlyUnread ? 0 : 1;
     setConversations((prev) =>
       prev.map((c) => (c.id === selectedChat.id ? { ...c, unread: nextUnread } : c))
     );
-    setSelectedChat((curr) => ({ ...curr, unread: nextUnread }));
+    setSelectedChat((curr) => curr ? ({ ...curr, unread: nextUnread }) : null);
   };
 
   // Bulk Operations
@@ -395,8 +226,8 @@ export default function InboxPage() {
 
   const handleBulkMarkRead = (markRead: boolean) => {
     setConversations((prev) => bulkUpdateReadStatus(prev, selectedIds, markRead));
-    if (selectedIds.includes(selectedChat.id)) {
-      setSelectedChat((curr) => ({ ...curr, unread: markRead ? 0 : 1 }));
+    if (selectedChat && selectedIds.includes(selectedChat.id)) {
+      setSelectedChat((curr) => curr ? ({ ...curr, unread: markRead ? 0 : 1 }) : null);
     }
     setSelectedIds([]);
   };
@@ -411,6 +242,7 @@ export default function InboxPage() {
   // Transfer / Reassignment
   const handleExecuteTransfer = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!selectedChat) return;
     setConversations((prev) =>
       prev.map((c) =>
         c.id === selectedChat.id
@@ -418,11 +250,11 @@ export default function InboxPage() {
           : c
       )
     );
-    setSelectedChat((prev) => ({
+    setSelectedChat((prev) => prev ? ({
       ...prev,
       team: transferDept,
       assignedTo: transferAgent,
-    }));
+    }) : null);
 
     if (transferNote.trim()) {
       setNotes((prev) => [
@@ -567,6 +399,7 @@ export default function InboxPage() {
   };
 
   const handleSendVoiceMessage = async () => {
+    if (!selectedChat) return;
     const duration = recordingSeconds || 6;
     const newMsg: MessageItem = {
       id: `m_${Date.now()}`,
@@ -588,7 +421,7 @@ export default function InboxPage() {
   };
 
   const handleSendReply = async () => {
-    if (!replyText.trim()) return;
+    if (!selectedChat || !replyText.trim()) return;
 
     const sentText = replyText.trim();
     const newMsg: MessageItem = {
@@ -619,12 +452,12 @@ export default function InboxPage() {
       )
     );
 
-    setSelectedChat((prev) => ({
+    setSelectedChat((prev) => prev ? ({
       ...prev,
       lastMessage: sentText,
       lastMessageAt: new Date().toISOString(),
       isCustomerLastInbound: false,
-    }));
+    }) : null);
 
     setReplyText('');
   };
@@ -644,10 +477,11 @@ export default function InboxPage() {
   };
 
   const updateStatus = (newStatus: 'open' | 'pending' | 'resolved' | 'closed') => {
+    if (!selectedChat) return;
     setConversations((prev) =>
       prev.map((c) => (c.id === selectedChat.id ? { ...c, status: newStatus } : c))
     );
-    setSelectedChat({ ...selectedChat, status: newStatus });
+    setSelectedChat((prev) => prev ? ({ ...prev, status: newStatus }) : null);
   };
 
   return (
@@ -832,7 +666,7 @@ export default function InboxPage() {
             </div>
           ) : (
             filteredConversations.map((chat) => {
-              const isSelected = selectedChat.id === chat.id;
+              const isSelected = selectedChat ? selectedChat.id === chat.id : false;
               const isChecked = selectedIds.includes(chat.id);
 
               return (
@@ -951,8 +785,31 @@ export default function InboxPage() {
           mobileView === 'list' ? 'hidden md:flex' : 'flex'
         }`}
       >
-        {/* Chat Header */}
-        <div className="h-16 bg-white border-b-2 border-[#202020] px-4 sm:px-6 flex items-center justify-between shrink-0">
+        {!selectedChat ? (
+          <div className="flex-1 flex flex-col items-center justify-center p-8 text-center bg-[#F4EFE7]/20">
+            <div className="w-16 h-16 rounded-[22px] bg-[#BED0F7]/50 border-2 border-[#202020] flex items-center justify-center mb-4 shadow-sm">
+              <MessageSquare className="w-8 h-8 text-[#202020]" />
+            </div>
+            <h3 className="text-lg font-bold font-serif text-[#202020] mb-1">
+              Shared Team Inbox
+            </h3>
+            <p className="text-xs text-[#202020]/70 max-w-sm mb-6 leading-relaxed">
+              Inbound customer messages from your verified Meta WhatsApp Business Account will automatically populate here in real time.
+            </p>
+            <div className="p-4 bg-white border-2 border-[#202020] rounded-[20px] max-w-md text-left text-xs space-y-2 shadow-xs">
+              <div className="flex items-center gap-2 font-bold text-[#202020]">
+                <ShieldAlert className="w-4 h-4 text-[#72A4F2]" />
+                24-Hour Customer Care Window
+              </div>
+              <p className="text-[11px] text-[#202020]/70 leading-normal">
+                When a customer sends an inbound message, a 24-hour freeform messaging session opens. After 24 hours of customer inactivity, Meta requires pre-approved template messages to re-engage.
+              </p>
+            </div>
+          </div>
+        ) : (
+          <>
+            {/* Chat Header */}
+            <div className="h-16 bg-white border-b-2 border-[#202020] px-4 sm:px-6 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2.5 min-w-0">
             {/* Mobile Back Button */}
             <button
@@ -1299,6 +1156,8 @@ export default function InboxPage() {
             </div>
           )}
         </div>
+          </>
+        )}
       </div>
 
       {/* MODAL 1: CANNED RESPONSES PICKER (Phase 5) */}

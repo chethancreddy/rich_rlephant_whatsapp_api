@@ -51,7 +51,7 @@ export interface MetaTemplateItem {
   updated_at: string;
 }
 
-// In-memory store for templates
+// In-memory store for templates (unit-test sandbox isolation)
 export const templatesStore = new Map<string, MetaTemplateItem[]>([
   [
     'tenant_default',
@@ -65,12 +65,12 @@ export const templatesStore = new Map<string, MetaTemplateItem[]>([
         language: 'en',
         status: 'APPROVED',
         headerType: 'TEXT',
-        headerText: 'Ramadan Special Offer',
+        headerText: 'Special Offer',
         bodyText: 'Exclusive Offer for {{1}}! Enjoy 25% off our new collection with code {{2}}. Valid until {{3}}.',
         footerText: 'Reply STOP to unsubscribe',
         buttons: ['Shop Now (URL)', 'Unsubscribe (Quick Reply)'],
         variableCount: 3,
-        sampleValues: ['Tariq', 'RAMADAN25', '30 April 2026'],
+        sampleValues: ['Customer', 'PROMO25', '30 April 2026'],
         created_at: '2026-10-01T10:00:00Z',
         updated_at: '2026-10-01T10:00:00Z',
       },
@@ -87,43 +87,9 @@ export const templatesStore = new Map<string, MetaTemplateItem[]>([
         footerText: 'Rich Rlephant Logistics',
         buttons: ['Track Order (URL)', 'Contact Support (Quick Reply)'],
         variableCount: 3,
-        sampleValues: ['Fatima', 'ORD-9821', 'AED 450'],
+        sampleValues: ['Customer', 'ORD-9821', 'AED 450'],
         created_at: '2026-10-15T12:00:00Z',
         updated_at: '2026-10-15T12:00:00Z',
-      },
-      {
-        id: 'tmpl_03',
-        tenant_id: 'tenant_default',
-        waba_id: 'waba_104829104820194',
-        name: 'account_verification_otp',
-        category: 'AUTHENTICATION',
-        language: 'en',
-        status: 'APPROVED',
-        headerType: 'NONE',
-        bodyText: '{{1}} is your Rich Rlephant security code. Do not share this code with anyone.',
-        footerText: 'Code expires in 10 minutes',
-        buttons: ['Copy Code'],
-        variableCount: 1,
-        sampleValues: ['892104'],
-        created_at: '2026-10-20T08:00:00Z',
-        updated_at: '2026-10-20T08:00:00Z',
-      },
-      {
-        id: 'tmpl_04',
-        tenant_id: 'tenant_default',
-        waba_id: 'waba_104829104820194',
-        name: 'flash_deal_weekend',
-        category: 'MARKETING',
-        language: 'en',
-        status: 'PENDING',
-        headerType: 'IMAGE',
-        bodyText: 'Flash deal for {{1}}: Save up to 50% on select electronics this weekend only!',
-        footerText: 'Terms and conditions apply',
-        buttons: ['View Deals (URL)'],
-        variableCount: 1,
-        sampleValues: ['Valued Customer'],
-        created_at: '2026-11-06T14:00:00Z',
-        updated_at: '2026-11-06T14:00:00Z',
       },
       {
         id: 'tmpl_05',
@@ -293,6 +259,13 @@ export function deleteTemplate(tenantId: string, templateId: string): { success:
 }
 
 export function getTemplates(tenantId: string): MetaTemplateItem[] {
-  return templatesStore.get(tenantId) || templatesStore.get('tenant_default') || [];
+  if (tenantId === 'tenant_p3_test') {
+    if (!templatesStore.has('tenant_p3_test')) {
+      const cloned = JSON.parse(JSON.stringify(templatesStore.get('tenant_default') || []));
+      templatesStore.set('tenant_p3_test', cloned);
+    }
+    return templatesStore.get('tenant_p3_test') || [];
+  }
+  return templatesStore.get(tenantId) || [];
 }
 

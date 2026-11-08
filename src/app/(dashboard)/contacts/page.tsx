@@ -40,53 +40,7 @@ interface ContactRow {
   createdAt: string;
 }
 
-const INITIAL_CONTACTS: ContactRow[] = [
-  {
-    id: 'ct_001',
-    name: 'Tariq Mansoor',
-    phone: '+971 50 443 2190',
-    consentCategory: 'Marketing',
-    source: 'Website Checkout Checkbox',
-    tags: ['VIP', 'Dubai Marina'],
-    createdAt: '12 Oct 2026',
-  },
-  {
-    id: 'ct_002',
-    name: 'Sarah Al Hashmi',
-    phone: '+971 52 881 9022',
-    consentCategory: 'Utility',
-    source: 'Retail Store QR Code Opt-In',
-    tags: ['Retail', 'Gold'],
-    createdAt: '18 Oct 2026',
-  },
-  {
-    id: 'ct_003',
-    name: 'Rahul Sharma',
-    phone: '+91 98765 43210',
-    consentCategory: 'Marketing',
-    source: 'Customer Support Inbound Request',
-    tags: ['Wholesale', 'India Desk'],
-    createdAt: '25 Oct 2026',
-  },
-  {
-    id: 'ct_004',
-    name: 'Fatima Al Zaabi',
-    phone: '+971 52 982 1102',
-    consentCategory: 'Marketing',
-    source: 'Website Checkout Checkbox',
-    tags: ['Retail', 'Sharjah'],
-    createdAt: '28 Oct 2026',
-  },
-  {
-    id: 'ct_005',
-    name: 'John Doe',
-    phone: '+1 415 555 2671',
-    consentCategory: 'Customer Care',
-    source: 'Customer Support Inbound Request',
-    tags: ['International', 'USA'],
-    createdAt: '01 Nov 2026',
-  },
-];
+const INITIAL_CONTACTS: ContactRow[] = [];
 
 interface OptInSourceItem {
   id: string;
@@ -103,37 +57,19 @@ const INITIAL_SOURCES: OptInSourceItem[] = [
     id: 'src_checkout_1',
     name: 'Website Checkout Checkbox',
     type: 'checkout_checkbox',
-    description: 'Mandatory affirmative checkbox on cart checkout page with v1.2 Privacy Notice.',
+    description: 'Affirmative checkbox on cart checkout page with Privacy Notice.',
     isActive: true,
-    contactsCount: 11420,
-    createdAt: '01 Oct 2026',
+    contactsCount: 0,
+    createdAt: 'Default',
   },
   {
-    id: 'src_qr_2',
-    name: 'Retail Store QR Code Opt-In',
-    type: 'qr_code',
-    description: 'Printed QR code on retail billing desk initiating WhatsApp keyword START.',
-    isActive: true,
-    contactsCount: 4210,
-    createdAt: '15 Oct 2026',
-  },
-  {
-    id: 'src_inbound_3',
+    id: 'src_inbound_2',
     name: 'Customer Support Inbound Request',
     type: 'inbound_whatsapp',
-    description: 'Direct inbound customer message requesting order update or technical support.',
+    description: 'Direct inbound customer message requesting support or order updates.',
     isActive: true,
-    contactsCount: 2790,
-    createdAt: '20 Oct 2026',
-  },
-  {
-    id: 'src_legacy_form',
-    name: 'Legacy 2025 Newsletter Form',
-    type: 'website_form',
-    description: 'Old lead generation form. Deactivated due to obsolete notice version.',
-    isActive: false,
     contactsCount: 0,
-    createdAt: '01 Jun 2025',
+    createdAt: 'Default',
   },
 ];
 
@@ -159,7 +95,7 @@ export default function ContactsPage() {
     fetch('/api/contacts')
       .then((res) => res.json())
       .then((data) => {
-        if (data.success && Array.isArray(data.contacts) && data.contacts.length > 0) {
+        if (data.success && Array.isArray(data.contacts)) {
           const mapped: ContactRow[] = data.contacts.map((c: any) => ({
             id: c.id,
             name: c.name || 'Anonymous',
@@ -174,9 +110,13 @@ export default function ContactsPage() {
             }),
           }));
           setContactsList(mapped);
+        } else {
+          setContactsList([]);
         }
       })
-      .catch(() => {});
+      .catch(() => {
+        setContactsList([]);
+      });
   }, []);
 
   // Contact filtering
@@ -409,45 +349,85 @@ export default function ContactsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#F4EFE7]">
-                {filteredContacts.map((c) => (
-                  <tr
-                    key={c.id}
-                    className={`hover:bg-[#F9F6F1]/50 transition-colors ${
-                      selectedContactIds.includes(c.id) ? 'bg-[#BED0F7]/25' : ''
-                    }`}
-                  >
-                    <td className="py-3.5 px-4">
-                      <input
-                        type="checkbox"
-                        checked={selectedContactIds.includes(c.id)}
-                        onChange={() => handleToggleSelectOne(c.id)}
-                        className="rounded-xs border-[#202020] accent-[#202020]"
-                      />
-                    </td>
-                    <td className="py-3.5 px-4 font-bold text-[#202020]">{c.name}</td>
-                    <td className="py-3.5 px-4 font-mono font-medium text-[#202020]">{c.phone}</td>
-                    <td className="py-3.5 px-4">
-                      <Badge variant="green" size="sm" className="gap-1">
-                        <CheckCheck className="h-3 w-3" />
-                        Granted ({c.consentCategory})
-                      </Badge>
-                    </td>
-                    <td className="py-3.5 px-4 text-[#202020]/80 font-medium">{c.source}</td>
-                    <td className="py-3.5 px-4">
-                      <div className="flex gap-1 flex-wrap">
-                        {c.tags.map((t) => (
-                          <span
-                            key={t}
-                            className="text-[10px] font-bold bg-[#F4EFE7] border border-[#202020] text-[#202020] px-2 py-0.5 rounded-full"
-                          >
-                            {t}
-                          </span>
-                        ))}
+                {filteredContacts.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="py-16 text-center">
+                      <div className="max-w-md mx-auto flex flex-col items-center">
+                        <div className="w-14 h-14 rounded-2xl bg-[#BED0F7]/30 border-2 border-[#202020] flex items-center justify-center mb-4">
+                          <Users className="w-7 h-7 text-[#202020]" />
+                        </div>
+                        <h3 className="text-base font-bold text-[#202020] mb-1">No Contacts Added Yet</h3>
+                        <p className="text-xs text-[#202020]/70 mb-5 text-center leading-relaxed">
+                          {searchQuery || selectedTagFilter
+                            ? 'No contacts match your active search filters.'
+                            : 'Import your opted-in customer phone numbers via CSV or capture consent through verified opt-in sources.'}
+                        </p>
+                        {!searchQuery && !selectedTagFilter && (
+                          <div className="flex items-center gap-3">
+                            <Button
+                              variant="primary"
+                              size="sm"
+                              onClick={() => setIsImporterOpen(true)}
+                              className="gap-2 font-bold"
+                            >
+                              <Upload className="w-4 h-4" />
+                              Import Contacts with Consent
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setActiveTab('sources')}
+                              className="gap-2 font-bold"
+                            >
+                              <PlusCircle className="w-4 h-4" />
+                              Manage Opt-In Sources
+                            </Button>
+                          </div>
+                        )}
                       </div>
                     </td>
-                    <td className="py-3.5 px-4 text-[#202020]/60 font-medium">{c.createdAt}</td>
                   </tr>
-                ))}
+                ) : (
+                  filteredContacts.map((c) => (
+                    <tr
+                      key={c.id}
+                      className={`hover:bg-[#F9F6F1]/50 transition-colors ${
+                        selectedContactIds.includes(c.id) ? 'bg-[#BED0F7]/25' : ''
+                      }`}
+                    >
+                      <td className="py-3.5 px-4">
+                        <input
+                          type="checkbox"
+                          checked={selectedContactIds.includes(c.id)}
+                          onChange={() => handleToggleSelectOne(c.id)}
+                          className="rounded-xs border-[#202020] accent-[#202020]"
+                        />
+                      </td>
+                      <td className="py-3.5 px-4 font-bold text-[#202020]">{c.name}</td>
+                      <td className="py-3.5 px-4 font-mono font-medium text-[#202020]">{c.phone}</td>
+                      <td className="py-3.5 px-4">
+                        <Badge variant="green" size="sm" className="gap-1">
+                          <CheckCheck className="h-3 w-3" />
+                          Granted ({c.consentCategory})
+                        </Badge>
+                      </td>
+                      <td className="py-3.5 px-4 text-[#202020]/80 font-medium">{c.source}</td>
+                      <td className="py-3.5 px-4">
+                        <div className="flex gap-1 flex-wrap">
+                          {c.tags.map((t) => (
+                            <span
+                              key={t}
+                              className="text-[10px] font-bold bg-[#F4EFE7] border border-[#202020] text-[#202020] px-2 py-0.5 rounded-full"
+                            >
+                              {t}
+                            </span>
+                          ))}
+                        </div>
+                      </td>
+                      <td className="py-3.5 px-4 text-[#202020]/60 font-medium">{c.createdAt}</td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>

@@ -48,66 +48,7 @@ export interface CampaignRecord {
 }
 
 // In-memory campaign store per tenant
-const tenantCampaignsMap: Record<string, CampaignRecord[]> = {
-  tenant_default: [
-    {
-      id: 'cmp_001',
-      tenantId: 'tenant_default',
-      name: 'UAE National Day VIP Broadcast',
-      category: 'MARKETING',
-      senderPhone: '+971 50 123 4567',
-      templateId: 'tmpl_uae_day',
-      templateName: 'uae_national_day_promo',
-      language: 'en',
-      variableMappings: [
-        { variableNumber: 1, sourceField: 'name', fallbackValue: 'Valued Customer' },
-        { variableNumber: 2, sourceField: 'static_value', staticValue: 'UAE52', fallbackValue: 'VIP20' },
-      ],
-      audienceFilter: { tag: 'VIP' },
-      totalRecipients: 10000,
-      eligibleRecipients: 9620,
-      excludedCount: 380,
-      sentCount: 4820,
-      deliveredCount: 4710,
-      readCount: 3890,
-      failedCount: 12,
-      pacingMessagesPerMinute: 80,
-      estimatedCostUSD: 84.50,
-      status: 'SENDING',
-      createdAt: '2026-11-06T10:00:00Z',
-      updatedAt: '2026-11-06T12:30:00Z',
-      createdBy: 'Chethan Reddy',
-    },
-    {
-      id: 'cmp_002',
-      tenantId: 'tenant_default',
-      name: 'Order Confirmation Digest',
-      category: 'UTILITY',
-      senderPhone: '+971 50 123 4567',
-      templateId: 'tmpl_order_conf',
-      templateName: 'order_confirmation',
-      language: 'en',
-      variableMappings: [
-        { variableNumber: 1, sourceField: 'name', fallbackValue: 'Customer' },
-        { variableNumber: 2, sourceField: 'static_value', staticValue: 'ORD-9827', fallbackValue: 'N/A' },
-      ],
-      audienceFilter: {},
-      totalRecipients: 1250,
-      eligibleRecipients: 1250,
-      excludedCount: 0,
-      sentCount: 1250,
-      deliveredCount: 1248,
-      readCount: 1190,
-      failedCount: 2,
-      pacingMessagesPerMinute: 60,
-      estimatedCostUSD: 18.75,
-      status: 'COMPLETED',
-      createdAt: '2026-11-05T08:00:00Z',
-      updatedAt: '2026-11-05T08:25:00Z',
-      createdBy: 'System Worker',
-    },
-  ],
-};
+const tenantCampaignsMap: Record<string, CampaignRecord[]> = {};
 
 /**
  * Calculates Meta conversation rate estimate based on category and recipient region
@@ -123,7 +64,7 @@ export function calculateCampaignCostUSD(eligibleCount: number, category: Messag
  * Retrieves all campaigns for a tenant
  */
 export function getCampaigns(tenantId: string): CampaignRecord[] {
-  return tenantCampaignsMap[tenantId] || tenantCampaignsMap['tenant_default'] || [];
+  return tenantCampaignsMap[tenantId] || [];
 }
 
 /**

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   FileText,
   RefreshCw,
@@ -40,85 +40,41 @@ interface TemplateItem {
   syncedAt: string;
 }
 
-const INITIAL_TEMPLATES: TemplateItem[] = [
-  {
-    id: 'tmpl_01',
-    name: 'seasonal_sale_2026',
-    category: 'MARKETING',
-    language: 'en',
-    status: 'APPROVED',
-    headerType: 'TEXT',
-    headerText: 'Ramadan Special Offer',
-    bodyText: 'Exclusive Offer for {{1}}! Enjoy 25% off our new collection with code {{2}}. Valid until {{3}}.',
-    footerText: 'Reply STOP to unsubscribe',
-    buttons: ['Shop Now (URL)', 'Unsubscribe (Quick Reply)'],
-    variableCount: 3,
-    sampleValues: ['Tariq', 'RAMADAN25', '30 April 2026'],
-    syncedAt: '10 mins ago',
-  },
-  {
-    id: 'tmpl_02',
-    name: 'order_confirmation',
-    category: 'UTILITY',
-    language: 'en',
-    status: 'APPROVED',
-    headerType: 'NONE',
-    bodyText: 'Hello {{1}}, your order #{{2}} of {{3}} is confirmed and being prepared for shipment.',
-    footerText: 'Rich Rlephant Logistics',
-    buttons: ['Track Order (URL)', 'Contact Support (Quick Reply)'],
-    variableCount: 3,
-    sampleValues: ['Fatima', 'ORD-9821', 'AED 450'],
-    syncedAt: '15 mins ago',
-  },
-  {
-    id: 'tmpl_03',
-    name: 'account_verification_otp',
-    category: 'AUTHENTICATION',
-    language: 'en',
-    status: 'APPROVED',
-    headerType: 'NONE',
-    bodyText: '{{1}} is your Rich Rlephant security code. Do not share this code with anyone.',
-    footerText: 'Code expires in 10 minutes',
-    buttons: ['Copy Code'],
-    variableCount: 1,
-    sampleValues: ['892104'],
-    syncedAt: '1 hour ago',
-  },
-  {
-    id: 'tmpl_04',
-    name: 'flash_deal_weekend',
-    category: 'MARKETING',
-    language: 'en',
-    status: 'PENDING',
-    headerType: 'IMAGE',
-    bodyText: 'Flash deal for {{1}}: Save up to 50% on select electronics this weekend only!',
-    footerText: 'Terms and conditions apply',
-    buttons: ['View Deals (URL)'],
-    variableCount: 1,
-    sampleValues: ['Valued Customer'],
-    syncedAt: '5 mins ago',
-  },
-  {
-    id: 'tmpl_05',
-    name: 'unformatted_discount_alert',
-    category: 'MARKETING',
-    language: 'en',
-    status: 'REJECTED',
-    headerType: 'NONE',
-    bodyText: 'Click here immediately for free money: {{1}}',
-    buttons: [],
-    variableCount: 1,
-    sampleValues: ['https://spam-link.test'],
-    rejectionReason: 'INCORRECT_CATEGORY: Content violates Meta WhatsApp Business Messaging Policy regarding misleading promotional wording.',
-    syncedAt: '2 hours ago',
-  },
-];
+const INITIAL_TEMPLATES: TemplateItem[] = [];
 
 export default function TemplatesPage() {
   const [templates, setTemplates] = useState<TemplateItem[]>(INITIAL_TEMPLATES);
   const [isBuilderOpen, setIsBuilderOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
   const [previewTemplate, setPreviewTemplate] = useState<TemplateItem | null>(null);
+
+  // Fetch templates from API
+  useEffect(() => {
+    fetch('/api/templates')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.templates && Array.isArray(data.templates)) {
+          setTemplates(data.templates);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const handleSync = async () => {
+    setIsSyncing(true);
+    try {
+      const res = await fetch('/api/templates/sync', { method: 'POST' });
+      const data = await res.json();
+      if (data.templates && Array.isArray(data.templates)) {
+        setTemplates(data.templates);
+      }
+    } catch {
+      // fallback
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   // Builder Form State
   const [templateName, setTemplateName] = useState('');
@@ -231,10 +187,11 @@ export default function TemplatesPage() {
             variant="outline"
             size="md"
             className="gap-2"
-            onClick={() => alert('Synchronized 5 templates from Meta Cloud API v21.0.')}
+            onClick={handleSync}
+            disabled={isSyncing}
           >
-            <RefreshCw className="h-4 w-4" />
-            Sync from Meta
+            <RefreshCw className={`h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />
+            {isSyncing ? 'Syncing...' : 'Sync from Meta'}
           </Button>
 
           <Button
@@ -251,7 +208,41 @@ export default function TemplatesPage() {
 
       {/* Grid of Templates */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {templates.map((tmpl) => (
+        {templates.length === 0 ? (
+          <div className="col-span-full py-16 text-center bg-white border-2 border-[#202020] rounded-[24px] p-8 shadow-xs">
+            <div className="max-w-md mx-auto flex flex-col items-center">
+              <div className="w-14 h-14 rounded-2xl bg-[#BED0F7]/30 border-2 border-[#202020] flex items-center justify-center mb-4">
+                <FileText className="w-7 h-7 text-[#202020]" />
+              </div>
+              <h3 className="text-base font-bold text-[#202020] mb-1">No Meta Templates Synced</h3>
+              <p className="text-xs text-[#202020]/70 mb-5 text-center leading-relaxed">
+                Connect your WhatsApp Business Account and synchronize approved Meta templates, or submit new templates for Meta review directly from the builder.
+              </p>
+              <div className="flex items-center gap-3">
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={() => setIsBuilderOpen(true)}
+                  className="gap-2 font-bold"
+                >
+                  <PlusCircle className="w-4 h-4" />
+                  Create Template
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleSync}
+                  disabled={isSyncing}
+                  className="gap-2 font-bold"
+                >
+                  <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
+                  Sync from Meta
+                </Button>
+              </div>
+            </div>
+          </div>
+        ) : (
+          templates.map((tmpl) => (
           <Card key={tmpl.id} className="p-6 flex flex-col justify-between">
             <div>
               <div className="flex items-start justify-between gap-3">
@@ -348,7 +339,8 @@ export default function TemplatesPage() {
               </div>
             </div>
           </Card>
-        ))}
+        ))
+      )}
       </div>
 
       {/* TEMPLATE BUILDER & LIVE MOBILE PREVIEW MODAL */}
