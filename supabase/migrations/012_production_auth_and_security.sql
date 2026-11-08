@@ -79,3 +79,4 @@ CREATE INDEX IF NOT EXISTS idx_sessions_user ON user_sessions(user_id, expires_a
 CREATE INDEX IF NOT EXISTS idx_sec_events_created ON security_events(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_sec_events_type ON security_events(event_type, severity);
 CREATE INDEX IF NOT EXISTS idx_auth_tokens_hash ON auth_verification_tokens(token_hash) WHERE consumed_at IS NULL;
+

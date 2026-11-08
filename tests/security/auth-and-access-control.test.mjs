@@ -186,3 +186,4 @@ test('QA 10: AES-256-GCM Vault Encryption & Token Tamper Defense', async (t) => 
 
   assert.equal(tamperedResult, null, 'Tampered token signature verification must return null (rejected)');
 });
+

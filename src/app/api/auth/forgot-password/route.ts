@@ -27,3 +27,4 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Internal server error processing password reset.' }, { status: 500 });
   }
 }
+

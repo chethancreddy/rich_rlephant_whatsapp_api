@@ -40,3 +40,4 @@
 - `META_APP_SECRET`: Maintained strictly in server environment variables (never in client JS).
 - `META_ACCESS_TOKEN`: Encrypted with AES-256-GCM before database persistence.
 - Zero secrets committed to Git repository.
+

@@ -37,3 +37,4 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Failed to process logout.' }, { status: 500 });
   }
 }
+

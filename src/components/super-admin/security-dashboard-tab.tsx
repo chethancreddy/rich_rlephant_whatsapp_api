@@ -440,3 +440,4 @@ function CheckCircle2Icon(props: React.SVGProps<SVGSVGElement>) {
     </svg>
   );
 }
+

@@ -71,3 +71,4 @@ This guide provides the official operations procedure for taking the **Rich Rlep
      - `whatsapp_business_management`
 5. Copy token and configure as `META_ACCESS_TOKEN` in Vercel Project Settings.
 6. Under **Step 2. Production setup** in Meta Developer Portal, attach your official commercial phone number (replaces the `+1 555` test number).
+

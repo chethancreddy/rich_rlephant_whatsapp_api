@@ -43,3 +43,4 @@ Configure the following variables in **Vercel Project Settings &rarr; Environmen
 3. Try opening `/dashboard` directly without cookie &rarr; confirm redirected to `/login`.
 4. Sign in as demo customer (`demo@rich-rlephant.com`) &rarr; confirm workspace loads with contacts.
 5. Open `/super-admin/login` &rarr; sign in with admin credentials &rarr; enter 6-digit MFA &rarr; confirm access to Security Management tab.
+
