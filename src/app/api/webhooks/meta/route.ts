@@ -70,6 +70,48 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // Asynchronously persist webhook events to Neon PostgreSQL
+  if (processedEvents.length > 0) {
+    (async () => {
+      try {
+        const { getNeonPool } = await import('@/lib/db/neon');
+        const pool = getNeonPool();
+        const client = await pool.connect();
+        const defaultTenantId = '00000000-0000-0000-0000-000000000001';
+
+        try {
+          for (const ev of processedEvents) {
+            if (ev.eventType === 'message_status' && ev.messageId && ev.newStatus) {
+              const statusCol =
+                ev.newStatus === 'read' ? 'read_at' : ev.newStatus === 'delivered' ? 'delivered_at' : 'sent_at';
+              await client.query(
+                `
+                UPDATE messages 
+                SET status = $1, ${statusCol} = NOW(), updated_at = NOW() 
+                WHERE provider_message_id = $2
+                `,
+                [ev.newStatus, ev.messageId]
+              );
+            } else if (ev.eventType === 'opt_out_suppression' && ev.contactPhone) {
+              await client.query(
+                `
+                INSERT INTO suppression_entries (tenant_id, phone_e164, reason, source)
+                VALUES ($1, $2, 'Customer STOP keyword opt-out', 'inbound_whatsapp')
+                ON CONFLICT (tenant_id, phone_e164) DO NOTHING
+                `,
+                [defaultTenantId, ev.contactPhone]
+              );
+            }
+          }
+        } finally {
+          client.release();
+        }
+      } catch (dbErr) {
+        console.error('[Meta Webhook DB Persistence Error]', dbErr);
+      }
+    })();
+  }
+
   return NextResponse.json(
     {
       status: 'received',

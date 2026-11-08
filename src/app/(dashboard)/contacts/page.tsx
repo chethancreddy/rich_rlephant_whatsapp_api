@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Users,
   Upload,
@@ -149,12 +149,38 @@ export default function ContactsPage() {
 
   // Opt-in sources state
   const [sources, setSources] = useState<OptInSourceItem[]>(INITIAL_SOURCES);
+  const [contactsList, setContactsList] = useState<ContactRow[]>(INITIAL_CONTACTS);
   const [newSourceName, setNewSourceName] = useState('');
   const [newSourceType, setNewSourceType] = useState('website_form');
   const [newSourceDesc, setNewSourceDesc] = useState('');
 
+  // Fetch live contacts from Neon Serverless PostgreSQL
+  useEffect(() => {
+    fetch('/api/contacts')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && Array.isArray(data.contacts) && data.contacts.length > 0) {
+          const mapped: ContactRow[] = data.contacts.map((c: any) => ({
+            id: c.id,
+            name: c.name || 'Anonymous',
+            phone: c.phone,
+            consentCategory: c.campaignEligibility ? 'Marketing' : 'Transactional',
+            source: c.sourceName || c.source || 'Website Form',
+            tags: ['Live DB', c.sourceType || 'Opted-In'],
+            createdAt: new Date(c.createdAt || Date.now()).toLocaleDateString('en-GB', {
+              day: '2-digit',
+              month: 'short',
+              year: 'numeric',
+            }),
+          }));
+          setContactsList(mapped);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   // Contact filtering
-  const filteredContacts = INITIAL_CONTACTS.filter((c) => {
+  const filteredContacts = contactsList.filter((c) => {
     const matchesSearch =
       c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       c.phone.includes(searchQuery) ||
