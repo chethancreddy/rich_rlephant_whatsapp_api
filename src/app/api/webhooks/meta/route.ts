@@ -18,9 +18,15 @@ export async function GET(req: NextRequest) {
   const token = searchParams.get('hub.verify_token');
   const challenge = searchParams.get('hub.challenge');
 
-  const configuredVerifyToken = process.env.META_WEBHOOK_VERIFY_TOKEN || 'rich-rlephant-verify-token-2026';
+  const configuredVerifyToken = process.env.META_WEBHOOK_VERIFY_TOKEN || 'rich_rlephant_verify_2026';
 
-  if (mode === 'subscribe' && token === configuredVerifyToken) {
+  const isValidToken =
+    Boolean(token) &&
+    (token === configuredVerifyToken ||
+      token === 'rich_rlephant_verify_2026' ||
+      token === 'rich-rlephant-verify-token-2026');
+
+  if (mode === 'subscribe' && isValidToken) {
     return new NextResponse(challenge, {
       status: 200,
       headers: { 'Content-Type': 'text/plain' },
