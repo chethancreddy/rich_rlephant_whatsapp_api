@@ -49,53 +49,9 @@ interface WebhookItem {
   failureCount: number;
 }
 
-const INITIAL_API_KEYS: ApiKeyItem[] = [
-  {
-    id: 'key_001',
-    name: 'Production Backend Integration',
-    prefix: 'rlep_live_8f92',
-    scopes: ['messages:send', 'contacts:write'],
-    createdAt: '14 Oct 2026',
-    lastUsed: 'Just now',
-    status: 'active',
-    expiresAt: 'No expiration',
-  },
-  {
-    id: 'key_002',
-    name: 'Zendesk CRM Connector',
-    prefix: 'rlep_live_3c71',
-    scopes: ['messages:send', 'contacts:read', 'templates:read'],
-    createdAt: '28 Oct 2026',
-    lastUsed: 'Yesterday',
-    status: 'active',
-    expiresAt: '90 days (26 Jan 2027)',
-  },
-];
+const INITIAL_API_KEYS: ApiKeyItem[] = [];
 
-const INITIAL_WEBHOOKS: WebhookItem[] = [
-  {
-    id: 'wh_001',
-    name: 'Customer CRM Sync (HubSpot)',
-    url: 'https://api.acmeretail.com/webhooks/rich-rlephant',
-    secret: 'whsec_8f2a91b4c3e7d56012',
-    events: ['message.delivered', 'message.read', 'customer.inbound_reply'],
-    status: 'active',
-    createdAt: '12 Oct 2026',
-    lastTriggered: '10 mins ago',
-    failureCount: 0,
-  },
-  {
-    id: 'wh_002',
-    name: 'Compliance & Opt-Out Stream',
-    url: 'https://compliance.acmeretail.com/webhooks/opt-out',
-    secret: 'whsec_99a8b7c6d5e4f3a2b1',
-    events: ['contact.opted_out'],
-    status: 'active',
-    createdAt: '20 Oct 2026',
-    lastTriggered: '2 hours ago',
-    failureCount: 0,
-  },
-];
+const INITIAL_WEBHOOKS: WebhookItem[] = [];
 
 export default function DeveloperPage() {
   const [activeTab, setActiveTab] = useState<'keys' | 'webhooks' | 'sandbox'>('keys');
@@ -430,7 +386,18 @@ export default function DeveloperPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#F4EFE7]">
-                  {apiKeys.map((key) => (
+                  {apiKeys.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="py-12 text-center text-[#202020]/60">
+                        <Key className="h-8 w-8 mx-auto mb-2 text-[#202020]/30" />
+                        <h4 className="font-serif font-bold text-sm text-[#202020]">No API Keys Generated</h4>
+                        <p className="text-xs text-[#202020]/60 mt-1 max-w-sm mx-auto">
+                          Click &quot;Generate New Key&quot; above to provision a scoped REST API token for your backend applications.
+                        </p>
+                      </td>
+                    </tr>
+                  ) : (
+                    apiKeys.map((key) => (
                     <tr key={key.id} className="hover:bg-[#F9F6F1]/50 transition-colors">
                       <td className="py-3.5 px-4 font-bold text-[#202020]">{key.name}</td>
                       <td className="py-3.5 px-4 font-mono font-medium text-[#202020]/70">
@@ -475,7 +442,7 @@ export default function DeveloperPage() {
                         )}
                       </td>
                     </tr>
-                  ))}
+                  )))}
                 </tbody>
               </table>
             </div>
@@ -539,7 +506,16 @@ export default function DeveloperPage() {
           </div>
 
           <div className="grid grid-cols-1 gap-4">
-            {webhooks.map((wh) => (
+            {webhooks.length === 0 ? (
+              <div className="bg-[#F9F6F1] rounded-[24px] border-2 border-[#202020] p-12 text-center text-[#202020]/60">
+                <Webhook className="h-8 w-8 mx-auto mb-2 text-[#202020]/30" />
+                <h4 className="font-serif font-bold text-sm text-[#202020]">No Webhooks Configured</h4>
+                <p className="text-xs text-[#202020]/60 mt-1 max-w-sm mx-auto">
+                  Click &quot;Register Webhook&quot; above to stream message delivery receipts, status updates, and inbound replies to your external endpoint.
+                </p>
+              </div>
+            ) : (
+              webhooks.map((wh) => (
               <div
                 key={wh.id}
                 className="bg-white rounded-[24px] border-2 border-[#202020] p-5 shadow-sm space-y-3"
@@ -605,7 +581,7 @@ export default function DeveloperPage() {
                   </div>
                 </div>
               </div>
-            ))}
+            )))}
           </div>
 
           {/* Test Ping Live Inspection Banner */}

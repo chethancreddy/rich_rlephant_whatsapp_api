@@ -6,6 +6,7 @@
 import crypto from 'node:crypto';
 import { getNeonPool } from '../db/neon.ts';
 import type { MembershipRole } from '../../types/domain.ts';
+import { sendTransactionalEmail } from './email-service.ts';
 
 export const SESSION_COOKIE_NAME = 'rlep_session';
 export const SESSION_DURATION_HOURS = 168; // 7 days
@@ -348,6 +349,17 @@ export async function registerCustomer(params: {
       userAgent: params.userAgent,
       details: { email, company: params.companyName },
     });
+
+    // Dispatch verification email via MSG91
+    sendTransactionalEmail({
+      toEmail: email,
+      toName: displayName,
+      templateType: 'verification',
+      variables: {
+        code: verificationRawToken.slice(0, 6).toUpperCase(),
+        link: `${process.env.NEXT_PUBLIC_APP_URL || 'https://richelephantmarketing.me'}/auth/verify-email?token=${verificationRawToken}`,
+      },
+    }).catch((emailErr) => console.error('[Registration Email Error]', emailErr));
 
     return { success: true, verificationToken: verificationRawToken, userId };
   } catch (err: any) {
@@ -744,13 +756,14 @@ export async function requestPasswordReset(emailInput: string, ipAddress?: strin
   const email = emailInput.trim().toLowerCase();
   const pool = getNeonPool();
 
-  const userRes = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
+  const userRes = await pool.query('SELECT id, display_name FROM users WHERE email = $1', [email]);
   if (userRes.rows.length === 0) {
     // Return generic success to prevent email enumeration attacks (OWASP ASVS standard)
     return { success: true };
   }
 
-  const userId = userRes.rows[0].id;
+  const userRow = userRes.rows[0];
+  const userId = userRow.id;
   const resetRawToken = crypto.randomBytes(32).toString('hex');
   const tokenHash = crypto.createHash('sha256').update(resetRawToken).digest('hex');
   const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
@@ -770,6 +783,17 @@ export async function requestPasswordReset(emailInput: string, ipAddress?: strin
     ipAddress,
     details: { email },
   });
+
+  // Dispatch password reset email via MSG91
+  sendTransactionalEmail({
+    toEmail: email,
+    toName: userRow.display_name || 'Customer',
+    templateType: 'password_reset',
+    variables: {
+      code: resetRawToken.slice(0, 6).toUpperCase(),
+      link: `${process.env.NEXT_PUBLIC_APP_URL || 'https://richelephantmarketing.me'}/auth/reset-password?token=${resetRawToken}`,
+    },
+  }).catch((emailErr) => console.error('[Password Reset Email Error]', emailErr));
 
   return { success: true, resetToken: resetRawToken };
 }

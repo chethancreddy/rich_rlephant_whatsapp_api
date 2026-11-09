@@ -1,39 +1,52 @@
 // ============================================================================
-// Billing & Usage Summary Endpoint
+// Billing & Usage Summary Endpoint (Real Database Aggregation)
 // Product: Rich Rlephant Marketing Whatsapp API
 // ============================================================================
 
 import { NextRequest, NextResponse } from 'next/server';
 import { calculateTenantInvoice } from '@/lib/services/billing-service';
+import { getNeonPool } from '@/lib/db/neon';
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
-  const tenantId = searchParams.get('tenantId') || 'tenant_demo_1';
+  const tenantId = searchParams.get('tenantId') || req.headers.get('x-tenant-id') || '9acfe96e-b425-44a1-b40d-9f85c586679d';
   const plan = (searchParams.get('plan') as any) || 'growth';
 
-  // Sample aggregated usage for current billing cycle
-  const mockUsage = {
-    tenantId,
-    planTier: plan,
-    activeContactsCount: 28450, // 3,450 over included 25,000
-    messageUsage: [
-      { countryCode: 'AE', category: 'marketing' as const, count: 12500 },
-      { countryCode: 'AE', category: 'utility' as const, count: 4200 },
-      { countryCode: 'IN', category: 'marketing' as const, count: 45000 },
-      { countryCode: 'IN', category: 'utility' as const, count: 8500 },
-      { countryCode: 'US', category: 'service' as const, count: 1200 },
-    ],
-  };
+  try {
+    const pool = getNeonPool();
+    const contactRes = await pool.query(
+      `SELECT count(*)::int as count FROM contacts WHERE tenant_id = $1 AND archived_at IS NULL`,
+      [tenantId]
+    );
+    const activeContactsCount = contactRes.rows[0]?.count || 0;
 
-  const invoice = calculateTenantInvoice(mockUsage);
+    const messageRes = await pool.query(
+      `SELECT count(*)::int as count FROM conversation_messages WHERE tenant_id = $1`,
+      [tenantId]
+    );
+    const totalMessages = messageRes.rows[0]?.count || 0;
 
-  return NextResponse.json({
-    success: true,
-    invoice,
-    cyclePeriod: {
-      start: '2026-11-01T00:00:00Z',
-      end: '2026-11-30T23:59:59Z',
-    },
-  });
+    const actualUsage = {
+      tenantId,
+      planTier: plan,
+      activeContactsCount,
+      messageUsage: [
+        { countryCode: 'IN', category: 'service' as const, count: totalMessages },
+      ],
+    };
+
+    const invoice = calculateTenantInvoice(actualUsage);
+
+    return NextResponse.json({
+      success: true,
+      invoice,
+      cyclePeriod: {
+        start: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString(),
+        end: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0, 23, 59, 59).toISOString(),
+      },
+    });
+  } catch (err: any) {
+    console.error('[Billing Usage Error]', err.message);
+    return NextResponse.json({ error: 'Failed to aggregate billing usage' }, { status: 500 });
+  }
 }
-

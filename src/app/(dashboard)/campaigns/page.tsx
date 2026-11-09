@@ -205,7 +205,7 @@ export default function CampaignsPage() {
   // Preview formatted text with variables replaced
   const getRenderedPreviewText = () => {
     let text = selectedTemplate.body;
-    text = text.replace('{{1}}', 'Tariq Mansoor');
+    text = text.replace('{{1}}', 'Customer Name');
     text = text.replace('{{2}}', variableMappings[2]?.staticValue || 'VIP25');
     return text;
   };
@@ -276,7 +276,7 @@ export default function CampaignsPage() {
             Suppressed Opt-Outs
           </span>
           <div className="text-2xl font-black font-serif text-[#991b1b] mt-1">
-            350
+            0
           </div>
           <span className="text-[10px] text-[#202020]/70 font-semibold mt-1 block">
             Enforced do-not-contact gate

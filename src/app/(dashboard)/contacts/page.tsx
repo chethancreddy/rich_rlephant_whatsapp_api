@@ -86,6 +86,7 @@ export default function ContactsPage() {
   // Opt-in sources state
   const [sources, setSources] = useState<OptInSourceItem[]>(INITIAL_SOURCES);
   const [contactsList, setContactsList] = useState<ContactRow[]>(INITIAL_CONTACTS);
+  const [suppressedContacts, setSuppressedContacts] = useState<any[]>([]);
   const [newSourceName, setNewSourceName] = useState('');
   const [newSourceType, setNewSourceType] = useState('website_form');
   const [newSourceDesc, setNewSourceDesc] = useState('');
@@ -262,7 +263,7 @@ export default function ContactsPage() {
           }`}
         >
           <Users className="h-4 w-4" />
-          Active Contacts (18,420)
+          Active Contacts ({contactsList.length.toLocaleString()})
         </button>
 
         <button
@@ -286,7 +287,7 @@ export default function ContactsPage() {
           }`}
         >
           <AlertOctagon className="h-4 w-4 text-[#E35A4F]" />
-          Suppression & Opt-Out Registry (350)
+          Suppression & Opt-Out Registry ({suppressedContacts.length.toLocaleString()})
         </button>
       </div>
 
@@ -507,28 +508,40 @@ export default function ContactsPage() {
       {activeTab === 'suppression' && (
         <Card title="Suppression & Do-Not-Contact Registry" subtitle="Instantly blocks all outbound campaign jobs">
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-[#F9F6F1] text-[#202020] uppercase font-bold border-b-2 border-[#202020]">
-                <tr>
-                  <th className="py-3 px-4">Phone Number</th>
-                  <th className="py-3 px-4">Channel</th>
-                  <th className="py-3 px-4">Reason</th>
-                  <th className="py-3 px-4">Source</th>
-                  <th className="py-3 px-4">Date Suppressed</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#F4EFE7]">
-                <tr className="hover:bg-[#F9F6F1]/50">
-                  <td className="py-3.5 px-4 font-mono font-bold text-[#202020]">+971 52 710 4433</td>
-                  <td className="py-3.5 px-4 font-medium text-[#202020]">WhatsApp</td>
-                  <td className="py-3.5 px-4">
-                    <Badge variant="red" size="sm">Inbound STOP Keyword</Badge>
-                  </td>
-                  <td className="py-3.5 px-4 text-[#202020]/70 font-medium">Inbound Webhook</td>
-                  <td className="py-3.5 px-4 text-[#202020]/50 font-medium">06 Nov 2026 10:14 UTC</td>
-                </tr>
-              </tbody>
-            </table>
+            {suppressedContacts.length === 0 ? (
+              <div className="p-12 text-center">
+                <AlertOctagon className="h-8 w-8 text-[#202020]/30 mx-auto mb-2" />
+                <h4 className="font-serif font-bold text-sm text-[#202020]">No Suppressed Contacts</h4>
+                <p className="text-xs text-[#202020]/60 mt-1 max-w-sm mx-auto">
+                  Contacts who text STOP or opt out will automatically appear here to prevent future campaign messaging.
+                </p>
+              </div>
+            ) : (
+              <table className="w-full text-left text-xs">
+                <thead className="bg-[#F9F6F1] text-[#202020] uppercase font-bold border-b-2 border-[#202020]">
+                  <tr>
+                    <th className="py-3 px-4">Phone Number</th>
+                    <th className="py-3 px-4">Channel</th>
+                    <th className="py-3 px-4">Reason</th>
+                    <th className="py-3 px-4">Source</th>
+                    <th className="py-3 px-4">Date Suppressed</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#F4EFE7]">
+                  {suppressedContacts.map((sc, idx) => (
+                    <tr key={idx} className="hover:bg-[#F9F6F1]/50">
+                      <td className="py-3.5 px-4 font-mono font-bold text-[#202020]">{sc.phone}</td>
+                      <td className="py-3.5 px-4 font-medium text-[#202020]">{sc.channel || 'WhatsApp'}</td>
+                      <td className="py-3.5 px-4">
+                        <Badge variant="red" size="sm">{sc.reason || 'Opt-Out'}</Badge>
+                      </td>
+                      <td className="py-3.5 px-4 text-[#202020]/70 font-medium">{sc.source || 'Inbound Keyword'}</td>
+                      <td className="py-3.5 px-4 text-[#202020]/50 font-medium">{sc.createdAt || 'Recent'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
         </Card>
       )}
@@ -601,7 +614,7 @@ export default function ContactsPage() {
               >
                 <div>
                   <span className="font-bold text-xs text-[#202020] block">
-                    Export All Workspace Contacts (18,420)
+                    Export All Workspace Contacts ({contactsList.length.toLocaleString()})
                   </span>
                   <span className="text-[11px] text-[#202020]/60">
                     Full dataset with complete opt-in metadata

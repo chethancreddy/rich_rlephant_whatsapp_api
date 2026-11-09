@@ -51,10 +51,10 @@ interface TeamMember {
 const INITIAL_TEAM: TeamMember[] = [
   {
     id: 'usr_owner',
-    name: 'Workspace Owner',
-    email: 'admin@workspace.local',
+    name: 'Chethan Reddy',
+    email: 'chethan@drfitveda.com',
     role: 'workspace_owner',
-    department: 'Customer Support',
+    department: 'Management',
     status: 'active',
     lastActive: 'Active Now',
   },

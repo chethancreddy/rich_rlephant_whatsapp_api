@@ -7,7 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getNeonPool } from '@/lib/db/neon';
 import { normalizePhoneE164 } from '@/lib/phone-normalizer';
 
-const DEFAULT_TENANT_ID = '00000000-0000-0000-0000-000000000001';
+const DEFAULT_TENANT_ID = '9acfe96e-b425-44a1-b40d-9f85c586679d';
 
 /**
  * GET /api/contacts

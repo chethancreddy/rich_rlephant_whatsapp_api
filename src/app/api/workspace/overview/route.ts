@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
 
     if (!tenantId) {
       const fallbackTenantRes = await pool.query(
-        `SELECT id FROM tenants WHERE slug = 'dr-fit-veda' OR status = 'active' ORDER BY created_at ASC LIMIT 1`
+        `SELECT id FROM tenants WHERE slug = 'drfitveda' OR slug = 'dr-fit-veda' OR id = '9acfe96e-b425-44a1-b40d-9f85c586679d' ORDER BY created_at ASC LIMIT 1`
       );
       tenantId = fallbackTenantRes.rows[0]?.id || '9acfe96e-b425-44a1-b40d-9f85c586679d';
     }
